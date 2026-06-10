@@ -3,7 +3,7 @@ import { pluckStringAt, pluckMutedAt, stopAllNodes } from '../audio/karplusStron
 import audioEngine from '../audio/AudioEngine'
 import type { ChordPosition } from '../types/chord'
 import { OPEN_STRING_FREQS } from '../types/chord'
-import type { ArpeggioPattern, ArpeggioState, CustomConfig, CustomStepKind } from '../types/audio'
+import type { ArpeggioPattern, ArpeggioState, CustomConfig, CustomStepKind, TimeSig } from '../types/audio'
 
 // ─── 内部步骤格式 ─────────────────────────────────────────────
 // number   : 弦索引 0-5，或下列哨值
@@ -35,6 +35,12 @@ const SWEEP_DURATION = 0.055
 // ─── 工具 ────────────────────────────────────────────────────
 const BASS_VOL   = 0.88
 const TREBLE_VOL = 0.55
+
+function timeSigToSecPerStep(timeSig: TimeSig, bpm: number): number {
+  // 2/4、3/4：以四分音符为一步（每步 60/bpm 秒）
+  // 4/4、6/8：以八分音符为一步（每步 60/bpm/2 秒）
+  return (timeSig === '4/4' || timeSig === '6/8') ? 60 / bpm / 2 : 60 / bpm
+}
 
 function getBassString(pos: ChordPosition): number {
   for (let i = 0; i < pos.frets.length; i++) {
@@ -236,7 +242,7 @@ export function useArpeggio() {
 
     if (pattern === 'custom' && customConfig) {
       customStepsRef.current = customConfig.steps.map(customKindToStep)
-      customSecRef.current   = customConfig.duration === 'quarter' ? 60 / bpm : 60 / bpm / 2
+      customSecRef.current   = timeSigToSecPerStep(customConfig.timeSig, bpm)
     }
 
     posRef.current    = position
@@ -253,7 +259,7 @@ export function useArpeggio() {
   // 播放中实时更新自定义节奏型（不重启）
   const updateCustomPattern = useCallback((config: CustomConfig, bpm: number) => {
     customStepsRef.current = config.steps.map(customKindToStep)
-    customSecRef.current   = config.duration === 'quarter' ? 60 / bpm : 60 / bpm / 2
+    customSecRef.current   = timeSigToSecPerStep(config.timeSig, bpm)
   }, [])
 
   useEffect(() => () => stop(), [stop])

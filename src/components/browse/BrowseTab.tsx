@@ -8,10 +8,10 @@ import ArpeggioPlayer from './ArpeggioPlayer'
 import CustomPatternEditor from './CustomPatternEditor'
 import ChordDiagram from '../chord/ChordDiagram'
 import ChordLabel from '../chord/ChordLabel'
-import type { ArpeggioPattern, CustomConfig, CustomDuration, CustomStepKind } from '../../types/audio'
+import type { ArpeggioPattern, CustomConfig, TimeSig, CustomStepKind } from '../../types/audio'
 
 const DEFAULT_CUSTOM_STEPS: CustomStepKind[] = ['根', '3', '12', '3']
-const DEFAULT_CUSTOM_DURATION: CustomDuration = 'quarter'
+const DEFAULT_CUSTOM_TIMSIG: TimeSig = '4/4'
 
 export default function BrowseTab() {
   const { keys, suffixes, getChordEntry } = useChordDb()
@@ -23,13 +23,13 @@ export default function BrowseTab() {
   const [localBpm, setLocalBpm] = useState(80)
   const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('53231323')
   const [customSteps, setCustomSteps] = useState<CustomStepKind[]>(DEFAULT_CUSTOM_STEPS)
-  const [customDuration, setCustomDuration] = useState<CustomDuration>(DEFAULT_CUSTOM_DURATION)
+  const [customTimeSig, setCustomTimeSig] = useState<TimeSig>(DEFAULT_CUSTOM_TIMSIG)
 
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
   const currentPosition = positions[positionIndex] ?? null
 
-  const customConfig: CustomConfig = { steps: customSteps, duration: customDuration }
+  const customConfig: CustomConfig = { steps: customSteps, timeSig: customTimeSig }
 
   useEffect(() => {
     setPositionIndex(0)
@@ -42,7 +42,7 @@ export default function BrowseTab() {
       updateCustomPattern(customConfig, localBpm)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customSteps, customDuration])
+  }, [customSteps, customTimeSig])
 
   function handlePlay() {
     if (!currentPosition) return
@@ -109,9 +109,9 @@ export default function BrowseTab() {
               <div className="border-t border-zinc-700 pt-4">
                 <CustomPatternEditor
                   steps={customSteps}
-                  duration={customDuration}
+                  timeSig={customTimeSig}
                   onStepsChange={setCustomSteps}
-                  onDurationChange={setCustomDuration}
+                  onTimeSigChange={setCustomTimeSig}
                 />
               </div>
             )}

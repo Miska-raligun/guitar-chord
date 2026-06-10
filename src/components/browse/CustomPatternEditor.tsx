@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { CustomStepKind, CustomDuration } from '../../types/audio'
+import type { CustomStepKind, TimeSig } from '../../types/audio'
 
 interface Props {
   steps: CustomStepKind[]
-  duration: CustomDuration
+  timeSig: TimeSig
   onStepsChange: (steps: CustomStepKind[]) => void
-  onDurationChange: (d: CustomDuration) => void
+  onTimeSigChange: (t: TimeSig) => void
 }
 
 // 显示顺序：分三区
@@ -27,7 +27,7 @@ const STEP_COLORS: Partial<Record<CustomStepKind, string>> = {
 const MAX_STEPS = 16
 const MIN_STEPS = 1
 
-export default function CustomPatternEditor({ steps, duration, onStepsChange, onDurationChange }: Props) {
+export default function CustomPatternEditor({ steps, timeSig, onStepsChange, onTimeSigChange }: Props) {
   const [editIdx, setEditIdx] = useState<number | null>(null)
 
   function updateStep(idx: number, kind: CustomStepKind) {
@@ -51,21 +51,21 @@ export default function CustomPatternEditor({ steps, duration, onStepsChange, on
 
   return (
     <div className="space-y-3">
-      {/* 时值选择 */}
+      {/* 拍号选择 */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-500">每步时值</span>
+        <span className="text-xs text-zinc-500">拍号</span>
         <div className="flex rounded-lg overflow-hidden border border-zinc-700">
-          {(['quarter', 'eighth'] as CustomDuration[]).map(d => (
+          {(['2/4', '3/4', '4/4', '6/8'] as TimeSig[]).map(t => (
             <button
-              key={d}
-              onClick={() => onDurationChange(d)}
-              className={`px-3 py-1 text-xs transition-colors ${
-                duration === d
+              key={t}
+              onClick={() => onTimeSigChange(t)}
+              className={`px-2.5 py-1 text-xs font-mono transition-colors ${
+                timeSig === t
                   ? 'bg-amber-500 text-zinc-950 font-semibold'
                   : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
               }`}
             >
-              {d === 'quarter' ? '♩ 四分' : '♪ 八分'}
+              {t}
             </button>
           ))}
         </div>

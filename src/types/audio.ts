@@ -15,11 +15,14 @@ export interface ChordMatch {
 // '12' = 1弦+2弦同时拨
 // '↓'  = 下扫弦，'↑' = 上扫弦
 export type CustomStepKind = '—' | '根' | 'x' | '1' | '2' | '3' | '4' | '5' | '6' | '12' | '↓' | '↑'
-export type CustomDuration = 'quarter' | 'eighth'
+// 拍号：决定每步的时长
+// 2/4、3/4 → 每步一个四分音符（60/bpm 秒）
+// 4/4、6/8 → 每步一个八分音符（60/bpm/2 秒）
+export type TimeSig = '2/4' | '3/4' | '4/4' | '6/8'
 
 export interface CustomConfig {
   steps: CustomStepKind[]
-  duration: CustomDuration
+  timeSig: TimeSig
 }
 
 // ─── 内置节奏型 ──────────────────────────────────────────────
