@@ -4,35 +4,36 @@ import type { ChordPosition } from '../../types/chord'
 
 interface Props {
   position: ChordPosition
-  activeString?: number | null
+  activeString?: number | null  // 指法拨弦高亮（0-5）
+  strumFlash?: boolean          // 扫弦整体闪光
   lite?: boolean
 }
 
-// String positions in the SVG (approximate x coords for each of 6 strings)
-// react-chords renders 6 strings left-to-right (string 0 = low E on left)
 const STRING_X_OFFSETS = [0.135, 0.271, 0.407, 0.543, 0.679, 0.815]
 
-export default function ChordDiagram({ position, activeString, lite = false }: Props) {
+export default function ChordDiagram({ position, activeString, strumFlash, lite = false }: Props) {
   const size = lite ? 120 : 180
-  const svgSize = size
 
   return (
-    <div className="relative inline-block" style={{ width: svgSize, height: svgSize }}>
-      <Chord
-        chord={position}
-        instrument={GUITAR_INSTRUMENT}
-        lite={lite}
-      />
-      {activeString !== null && activeString !== undefined && (
+    <div
+      className={`relative inline-block rounded-lg transition-all duration-75 ${
+        strumFlash ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-zinc-950' : ''
+      }`}
+      style={{ width: size, height: size }}
+    >
+      <Chord chord={position} instrument={GUITAR_INSTRUMENT} lite={lite} />
+
+      {/* 指法单弦高亮（只在非扫弦时显示） */}
+      {!strumFlash && activeString !== null && activeString !== undefined && (
         <div
-          className="absolute top-0 pointer-events-none"
+          className="absolute pointer-events-none"
           style={{
             left: `${STRING_X_OFFSETS[activeString] * 100}%`,
             transform: 'translateX(-50%)',
-            top: '8%',
+            top: '6%',
           }}
         >
-          <div className="w-4 h-4 rounded-full bg-amber-400 opacity-80 animate-ping" />
+          <div className="w-3 h-3 rounded-full bg-amber-400 opacity-90 animate-ping" />
         </div>
       )}
     </div>

@@ -17,7 +17,7 @@ export default function BrowseTab() {
   const [selectedSuffix, setSelectedSuffix] = useState(suffixes[0] ?? 'major')
   const [positionIndex, setPositionIndex] = useState(0)
   const [localBpm, setLocalBpm] = useState(80)
-  const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('folk')
+  const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('53231323')
 
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
@@ -70,6 +70,7 @@ export default function BrowseTab() {
             <ChordDiagram
               position={currentPosition}
               activeString={arpeggioState.activeString}
+              strumFlash={arpeggioState.isStrumBeat}
             />
             <PositionSelector
               total={positions.length}

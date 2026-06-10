@@ -10,50 +10,45 @@ interface Props {
   onBpmChange: (bpm: number) => void
 }
 
-const PATTERN_LABELS: Record<ArpeggioPattern, string> = {
-  folk: '民谣 (p-i-m-a)',
-  classical: '古典 (p-a-m-i)',
-  pop: '扫弦',
+const PATTERN_LABELS: Record<ArpeggioPattern, { title: string; sub: string }> = {
+  '53231323': { title: '53231323',    sub: '民谣指法' },
+  'x3231323': { title: 'x·3231323',  sub: '切音指法' },
+  'strum':    { title: 'DDUUDU',     sub: '扫弦' },
 }
 
 export default function ArpeggioPlayer({
-  position,
-  arpeggioState,
-  onPlay,
-  onStop,
-  onPatternChange,
-  onBpmChange,
+  position, arpeggioState, onPlay, onStop, onPatternChange, onBpmChange,
 }: Props) {
   const { isPlaying, bpm, pattern } = arpeggioState
 
   return (
     <div className="w-full space-y-3">
-      <div className="text-xs text-zinc-500 uppercase tracking-wider">分解和弦</div>
+      <div className="text-xs text-zinc-500 uppercase tracking-wider">伴奏节奏型</div>
 
-      <div className="flex gap-2 flex-wrap">
-        {(Object.keys(PATTERN_LABELS) as ArpeggioPattern[]).map(p => (
-          <button
-            key={p}
-            onClick={() => onPatternChange(p)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              pattern === p
-                ? 'bg-amber-500 text-zinc-950'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-            }`}
-          >
-            {PATTERN_LABELS[p]}
-          </button>
-        ))}
+      <div className="grid grid-cols-3 gap-2">
+        {(Object.keys(PATTERN_LABELS) as ArpeggioPattern[]).map(p => {
+          const { title, sub } = PATTERN_LABELS[p]
+          return (
+            <button
+              key={p}
+              onClick={() => onPatternChange(p)}
+              className={`flex flex-col items-center py-2 px-1 rounded-lg text-xs font-medium transition-colors leading-tight ${
+                pattern === p
+                  ? 'bg-amber-500 text-zinc-950'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+            >
+              <span className="font-mono font-bold">{title}</span>
+              <span className={`mt-0.5 text-[10px] ${pattern === p ? 'text-zinc-800' : 'text-zinc-500'}`}>{sub}</span>
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex items-center gap-3">
         <span className="text-xs text-zinc-400 w-12">速度</span>
         <input
-          type="range"
-          min={40}
-          max={200}
-          step={5}
-          value={bpm}
+          type="range" min={40} max={200} step={5} value={bpm}
           onChange={e => onBpmChange(Number(e.target.value))}
           className="flex-1 accent-amber-500"
         />
@@ -61,16 +56,14 @@ export default function ArpeggioPlayer({
       </div>
 
       <button
-        onClick={() =>
-          isPlaying ? onStop() : onPlay(position, pattern, bpm)
-        }
+        onClick={() => isPlaying ? onStop() : onPlay(position, pattern, bpm)}
         className={`w-full py-3 rounded-xl font-medium transition-colors ${
           isPlaying
             ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
             : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
         }`}
       >
-        {isPlaying ? '⏹ 停止播放' : '▶ 播放分解和弦'}
+        {isPlaying ? '⏹ 停止播放' : '▶ 播放伴奏'}
       </button>
     </div>
   )
