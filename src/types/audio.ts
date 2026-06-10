@@ -7,15 +7,17 @@ export interface ChordMatch {
   position: ChordPosition | null
 }
 
-// 53231323: 最常见民谣指法（5弦起拨）
-// x3231323: 切音版指法（x=闷音击弦）
-// strum:    扫弦 DDUUDU
-export type ArpeggioPattern = '53231323' | 'x3231323' | 'strum'
+// 节奏型标识
+// '53231323' : 根音（自动识别弦）+ 3231323 高音弦，根音正常拨
+// 'x3231323' : 根音（自动识别弦，闷音）+ 3231323 高音弦
+// '3_12_3'   : 根音 + 3弦 + (1弦+2弦同时) + 3弦，每步四分音符
+// 'strum'    : DDUUDU 扫弦
+export type ArpeggioPattern = '53231323' | 'x3231323' | '3_12_3' | 'strum'
 
 export interface ArpeggioState {
   isPlaying: boolean
   bpm: number
   pattern: ArpeggioPattern
-  activeString: number | null   // 指法拨弦高亮（0-5）
-  isStrumBeat: boolean          // 扫弦节拍闪光（替代逐弦抖动）
+  activeString: number | null   // 指法单弦高亮（0-5）
+  isStrumBeat: boolean          // 扫弦/切音整体闪光
 }

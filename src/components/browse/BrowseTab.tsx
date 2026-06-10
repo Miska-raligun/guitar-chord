@@ -19,6 +19,7 @@ export default function BrowseTab() {
   const [localBpm, setLocalBpm] = useState(80)
   const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('53231323')
 
+
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
   const currentPosition = positions[positionIndex] ?? null

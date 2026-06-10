@@ -10,11 +10,12 @@ interface Props {
   onBpmChange: (bpm: number) => void
 }
 
-const PATTERN_LABELS: Record<ArpeggioPattern, { title: string; sub: string }> = {
-  '53231323': { title: '53231323',    sub: '民谣指法' },
-  'x3231323': { title: 'x·3231323',  sub: '切音指法' },
-  'strum':    { title: 'DDUUDU',     sub: '扫弦' },
-}
+const PATTERNS: { id: ArpeggioPattern; title: string; sub: string }[] = [
+  { id: '53231323', title: '根音·3231323', sub: '民谣指法' },
+  { id: 'x3231323', title: 'x·3231323',   sub: '切音指法' },
+  { id: '3_12_3',   title: '根音·3·(12)·3', sub: '抒情指法' },
+  { id: 'strum',    title: 'DDUUDU',       sub: '扫弦' },
+]
 
 export default function ArpeggioPlayer({
   position, arpeggioState, onPlay, onStop, onPatternChange, onBpmChange,
@@ -25,24 +26,23 @@ export default function ArpeggioPlayer({
     <div className="w-full space-y-3">
       <div className="text-xs text-zinc-500 uppercase tracking-wider">伴奏节奏型</div>
 
-      <div className="grid grid-cols-3 gap-2">
-        {(Object.keys(PATTERN_LABELS) as ArpeggioPattern[]).map(p => {
-          const { title, sub } = PATTERN_LABELS[p]
-          return (
-            <button
-              key={p}
-              onClick={() => onPatternChange(p)}
-              className={`flex flex-col items-center py-2 px-1 rounded-lg text-xs font-medium transition-colors leading-tight ${
-                pattern === p
-                  ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
-            >
-              <span className="font-mono font-bold">{title}</span>
-              <span className={`mt-0.5 text-[10px] ${pattern === p ? 'text-zinc-800' : 'text-zinc-500'}`}>{sub}</span>
-            </button>
-          )
-        })}
+      <div className="grid grid-cols-2 gap-2">
+        {PATTERNS.map(({ id, title, sub }) => (
+          <button
+            key={id}
+            onClick={() => onPatternChange(id)}
+            className={`flex flex-col items-center py-2.5 px-2 rounded-lg text-xs font-medium transition-colors leading-tight ${
+              pattern === id
+                ? 'bg-amber-500 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+            }`}
+          >
+            <span className="font-mono font-bold text-[11px]">{title}</span>
+            <span className={`mt-0.5 text-[10px] ${pattern === id ? 'text-zinc-800' : 'text-zinc-500'}`}>
+              {sub}
+            </span>
+          </button>
+        ))}
       </div>
 
       <div className="flex items-center gap-3">
