@@ -1,4 +1,4 @@
-type Tab = 'recognize' | 'browse' | 'fretboard'
+type Tab = 'recognize' | 'browse' | 'fretboard' | 'compose'
 
 interface Props {
   active: Tab
@@ -6,9 +6,10 @@ interface Props {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'recognize', label: '🎵 声音识别' },
-  { id: 'browse',    label: '🎼 和弦浏览' },
-  { id: 'fretboard', label: '🎸 指板音名' },
+  { id: 'recognize', label: '🎵 识别' },
+  { id: 'browse',    label: '🎼 和弦' },
+  { id: 'fretboard', label: '🎸 指板' },
+  { id: 'compose',   label: '🎹 编曲' },
 ]
 
 export default function TabBar({ active, onChange }: Props) {

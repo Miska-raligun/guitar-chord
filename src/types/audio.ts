@@ -35,3 +35,24 @@ export interface ArpeggioState {
   activeString: number | number[] | null  // 支持多弦同时高亮
   isStrumBeat: boolean
 }
+
+// ─── 编曲台 ──────────────────────────────────────────────────
+export interface ChordSlot {
+  root: string | null       // null = 空小节
+  suffix: string | null
+  positionIndex: number
+}
+
+export interface MelodyNote {
+  semitone: number          // 0-11，绝对半音（C=0）
+}
+
+export interface SequencerState {
+  bpm: number
+  pattern: Exclude<ArpeggioPattern, 'custom'>
+  keyRoot: number           // 0-11，用于显示 solfège 标注
+  chords: ChordSlot[]       // length = 8
+  melody: (MelodyNote | null)[][]  // [bar][beat=0..3]
+  isPlaying: boolean
+  currentBar: number        // -1 = 未播放
+}
