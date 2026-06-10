@@ -4,8 +4,8 @@ import type { ChordPosition } from '../../types/chord'
 
 interface Props {
   position: ChordPosition
-  activeString?: number | null  // 指法拨弦高亮（0-5）
-  strumFlash?: boolean          // 扫弦整体闪光
+  activeString?: number | number[] | null
+  strumFlash?: boolean
   lite?: boolean
 }
 
@@ -13,6 +13,14 @@ const STRING_X_OFFSETS = [0.135, 0.271, 0.407, 0.543, 0.679, 0.815]
 
 export default function ChordDiagram({ position, activeString, strumFlash, lite = false }: Props) {
   const size = lite ? 120 : 180
+
+  // 统一为数组，空数组 = 无高亮
+  const activeStrings: number[] =
+    activeString === null || activeString === undefined
+      ? []
+      : Array.isArray(activeString)
+      ? activeString
+      : [activeString]
 
   return (
     <div
@@ -23,19 +31,19 @@ export default function ChordDiagram({ position, activeString, strumFlash, lite 
     >
       <Chord chord={position} instrument={GUITAR_INSTRUMENT} lite={lite} />
 
-      {/* 指法单弦高亮（只在非扫弦时显示） */}
-      {!strumFlash && activeString !== null && activeString !== undefined && (
+      {!strumFlash && activeStrings.map(si => (
         <div
+          key={si}
           className="absolute pointer-events-none"
           style={{
-            left: `${STRING_X_OFFSETS[activeString] * 100}%`,
+            left: `${STRING_X_OFFSETS[si] * 100}%`,
             transform: 'translateX(-50%)',
             top: '6%',
           }}
         >
           <div className="w-3 h-3 rounded-full bg-amber-400 opacity-90 animate-ping" />
         </div>
-      )}
+      ))}
     </div>
   )
 }

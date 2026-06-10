@@ -89,7 +89,7 @@ export function useArpeggio() {
   const customSecRef   = useRef<number>(60 / 80)  // seconds per step
 
   // ─── 动画工具 ───────────────────────────────────────────────
-  const animateString = useCallback((strIdx: number, time: number, gen: number, dur = 170) => {
+  const animateString = useCallback((strIdx: number | number[], time: number, gen: number, dur = 170) => {
     const ms = Math.max(0, (time - audioEngine.getContext().currentTime) * 1000)
     setTimeout(() => {
       if (genRef.current !== gen) return
@@ -160,7 +160,7 @@ export function useArpeggio() {
         const freq = getFreq(pos, si)
         if (freq !== null) pluckStringAt(freq, time, TREBLE_VOL * 1.1)
       })
-      animateString(playable[playable.length - 1], time, gen, 200)
+      animateString(playable, time, gen, 200)  // 传整个数组，同时高亮所有弦
       return
     }
 

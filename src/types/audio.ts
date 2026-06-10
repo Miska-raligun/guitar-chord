@@ -29,6 +29,6 @@ export interface ArpeggioState {
   isPlaying: boolean
   bpm: number
   pattern: ArpeggioPattern
-  activeString: number | null
+  activeString: number | number[] | null  // 支持多弦同时高亮
   isStrumBeat: boolean
 }
