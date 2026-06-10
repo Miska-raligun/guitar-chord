@@ -7,17 +7,28 @@ export interface ChordMatch {
   position: ChordPosition | null
 }
 
-// 节奏型标识
-// '53231323' : 根音（自动识别弦）+ 3231323 高音弦，根音正常拨
-// 'x3231323' : 根音（自动识别弦，闷音）+ 3231323 高音弦
-// '3_12_3'   : 根音 + 3弦 + (1弦+2弦同时) + 3弦，每步四分音符
-// 'strum'    : DDUUDU 扫弦
-export type ArpeggioPattern = '53231323' | 'x3231323' | '3_12_3' | 'strum'
+// ─── 自定义节奏型步骤 ─────────────────────────────────────────
+// '—'  = 休止（静音）
+// '根' = 自动识别根音弦，正常拨
+// 'x'  = 自动识别根音弦，闷音
+// '1'~'6' = 吉他弦序（1=高音E, 6=低音E）
+// '12' = 1弦+2弦同时拨
+// '↓'  = 下扫弦，'↑' = 上扫弦
+export type CustomStepKind = '—' | '根' | 'x' | '1' | '2' | '3' | '4' | '5' | '6' | '12' | '↓' | '↑'
+export type CustomDuration = 'quarter' | 'eighth'
+
+export interface CustomConfig {
+  steps: CustomStepKind[]
+  duration: CustomDuration
+}
+
+// ─── 内置节奏型 ──────────────────────────────────────────────
+export type ArpeggioPattern = '53231323' | 'x3231323' | '3_12_3' | 'strum' | 'custom'
 
 export interface ArpeggioState {
   isPlaying: boolean
   bpm: number
   pattern: ArpeggioPattern
-  activeString: number | null   // 指法单弦高亮（0-5）
-  isStrumBeat: boolean          // 扫弦/切音整体闪光
+  activeString: number | null
+  isStrumBeat: boolean
 }

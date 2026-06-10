@@ -3,30 +3,24 @@ import { pluckStringAt, pluckMutedAt, stopAllNodes } from '../audio/karplusStron
 import audioEngine from '../audio/AudioEngine'
 import type { ChordPosition } from '../types/chord'
 import { OPEN_STRING_FREQS } from '../types/chord'
-import type { ArpeggioPattern, ArpeggioState } from '../types/audio'
+import type { ArpeggioPattern, ArpeggioState, CustomConfig, CustomStepKind } from '../types/audio'
 
-// ─── 步骤类型 ────────────────────────────────────────────────
-// number   : 弦索引 0-5（0=低音E, 5=高音E）或哨值
-// number[] : 同时拨多弦（如 [4,5] = B弦+高音E弦同时）
+// ─── 内部步骤格式 ─────────────────────────────────────────────
+// number   : 弦索引 0-5，或下列哨值
+// number[] : 同时拨多弦
 type PatternStep = number | number[]
 
-// 哨值
-const BASS      = -10  // 自动识别当前和弦最低非静音弦，正常拨
-const MUTE_BASS = -11  // 同上，但用闷音（切音效果）
+const BASS        = -10  // 自动识别根音弦，正常拨
+const MUTE_BASS   = -11  // 自动识别根音弦，闷音
+const REST        = -20  // 休止
+const STRUM_DOWN  = -30  // 下扫弦
+const STRUM_UP    = -31  // 上扫弦
 
-// ─── 节奏型定义 ──────────────────────────────────────────────
-// 弦编号对照: 吉他1弦=高音E=idx5, 2弦=B=idx4, 3弦=G=idx3, 4弦=D=idx2, 5弦=A=idx1, 6弦=低音E=idx0
-
-// 根音+3231323：根音弦自动识别（G和弦→6弦，C/Am→5弦，D→4弦…）
+// ─── 内置节奏型 ──────────────────────────────────────────────
 const PATTERN_53231323: PatternStep[] = [BASS,      3, 4, 3, 5, 3, 4, 3]
-
-// x3231323：闷根音 + 同样的高音弦型
 const PATTERN_X3231323: PatternStep[] = [MUTE_BASS, 3, 4, 3, 5, 3, 4, 3]
+const PATTERN_3_12_3:   PatternStep[] = [BASS, 3, [4, 5], 3]
 
-// 根音·3·(12)·3：每步一个四分音符，(12) = 1弦+2弦同时拨
-const PATTERN_3_12_3: PatternStep[] = [BASS, 3, [4, 5], 3]
-
-// ─── 扫弦 ────────────────────────────────────────────────────
 type StrumBeat = { dir: 'down' | 'up'; vel: number }
 const STRUM_BEATS: StrumBeat[] = [
   { dir: 'down', vel: 1.0 },
@@ -38,22 +32,39 @@ const STRUM_BEATS: StrumBeat[] = [
 ]
 const SWEEP_DURATION = 0.055
 
-// ─── 音量 ────────────────────────────────────────────────────
+// ─── 工具 ────────────────────────────────────────────────────
 const BASS_VOL   = 0.88
 const TREBLE_VOL = 0.55
 
-// ─── 工具 ────────────────────────────────────────────────────
-function getBassString(position: ChordPosition): number {
-  for (let i = 0; i < position.frets.length; i++) {
-    if (position.frets[i] !== -1) return i
+function getBassString(pos: ChordPosition): number {
+  for (let i = 0; i < pos.frets.length; i++) {
+    if (pos.frets[i] !== -1) return i
   }
-  return 1  // fallback A弦
+  return 1
 }
 
-function getStringFreq(position: ChordPosition, strIdx: number): number | null {
-  const fret = position.frets[strIdx]
+function getFreq(pos: ChordPosition, strIdx: number): number | null {
+  const fret = pos.frets[strIdx]
   if (fret === -1) return null
   return OPEN_STRING_FREQS[strIdx] * Math.pow(2, fret / 12)
+}
+
+// 将自定义步骤枚举转换为内部 PatternStep
+function customKindToStep(kind: CustomStepKind): PatternStep {
+  switch (kind) {
+    case '—':  return REST
+    case '根': return BASS
+    case 'x':  return MUTE_BASS
+    case '1':  return 5
+    case '2':  return 4
+    case '3':  return 3
+    case '4':  return 2
+    case '5':  return 1
+    case '6':  return 0
+    case '12': return [5, 4]
+    case '↓':  return STRUM_DOWN
+    case '↑':  return STRUM_UP
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -67,160 +78,166 @@ export function useArpeggio() {
     isStrumBeat: false,
   })
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const nextTimeRef = useRef(0)
-  const stepRef     = useRef(0)
-  const posRef      = useRef<ChordPosition | null>(null)
-  const patternRef  = useRef<ArpeggioPattern>('53231323')
-  const bpmRef      = useRef(80)
-  const genRef      = useRef(0)
+  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const nextTimeRef    = useRef(0)
+  const stepRef        = useRef(0)
+  const posRef         = useRef<ChordPosition | null>(null)
+  const patternRef     = useRef<ArpeggioPattern>('53231323')
+  const bpmRef         = useRef(80)
+  const genRef         = useRef(0)
+  const customStepsRef = useRef<PatternStep[]>([])
+  const customSecRef   = useRef<number>(60 / 80)  // seconds per step
 
-  // 触发单步UI高亮（传入已解析的实际弦索引）
-  const animateString = useCallback((strIdx: number, time: number, gen: number, duration = 170) => {
-    const delayMs = Math.max(0, (time - audioEngine.getContext().currentTime) * 1000)
+  // ─── 动画工具 ───────────────────────────────────────────────
+  const animateString = useCallback((strIdx: number, time: number, gen: number, dur = 170) => {
+    const ms = Math.max(0, (time - audioEngine.getContext().currentTime) * 1000)
     setTimeout(() => {
       if (genRef.current !== gen) return
       setArpeggioState(s => ({ ...s, activeString: strIdx, isStrumBeat: false }))
       setTimeout(() => {
         if (genRef.current !== gen) return
         setArpeggioState(s => ({ ...s, activeString: null }))
-      }, duration)
-    }, delayMs)
+      }, dur)
+    }, ms)
   }, [])
 
-  // 触发切音/扫弦闪光
-  const animateFlash = useCallback((time: number, gen: number, duration = 200) => {
-    const delayMs = Math.max(0, (time - audioEngine.getContext().currentTime) * 1000)
+  const animateFlash = useCallback((time: number, gen: number, dur = 200) => {
+    const ms = Math.max(0, (time - audioEngine.getContext().currentTime) * 1000)
     setTimeout(() => {
       if (genRef.current !== gen) return
       setArpeggioState(s => ({ ...s, isStrumBeat: true, activeString: null }))
       setTimeout(() => {
         if (genRef.current !== gen) return
         setArpeggioState(s => ({ ...s, isStrumBeat: false }))
-      }, duration)
-    }, delayMs)
+      }, dur)
+    }, ms)
   }, [])
 
-  // ─── 调度单步（支持 BASS / MUTE_BASS / 多弦数组 / 普通单弦）───
-  const scheduleStep = useCallback((rawStep: PatternStep, time: number, isBassStep: boolean, gen: number) => {
+  // ─── 扫弦（共用）───────────────────────────────────────────
+  const doStrum = useCallback((dir: 'down' | 'up', vel: number, time: number, gen: number) => {
+    const pos = posRef.current
+    if (!pos) return
+    const strings = dir === 'down' ? [0,1,2,3,4,5] : [5,4,3,2,1,0]
+    const dps = SWEEP_DURATION / 5
+    strings.forEach((si, i) => {
+      const freq = getFreq(pos, si)
+      if (freq === null) return
+      const v = dir === 'down' ? vel * (0.6 + i * 0.01) : vel * (0.55 - i * 0.01)
+      pluckStringAt(freq, time + i * dps, v)
+    })
+    animateFlash(time, gen, Math.min((60 / bpmRef.current) * 700, 280))
+  }, [animateFlash])
+
+  // ─── 调度单步 ────────────────────────────────────────────────
+  const scheduleStep = useCallback((rawStep: PatternStep, time: number, isBass: boolean, gen: number) => {
     const pos = posRef.current
     if (!pos) return
 
-    // ① BASS / MUTE_BASS：自动定位根音弦
+    if (rawStep === REST) return
+
+    if (rawStep === STRUM_DOWN) { doStrum('down', 0.78, time, gen); return }
+    if (rawStep === STRUM_UP)   { doStrum('up',   0.48, time, gen); return }
+
     if (rawStep === BASS || rawStep === MUTE_BASS) {
-      const bassIdx = getBassString(pos)
-      const freq = getStringFreq(pos, bassIdx)
+      const si  = getBassString(pos)
+      const freq = getFreq(pos, si)
       if (freq === null) return
       if (rawStep === BASS) {
         pluckStringAt(freq, time, BASS_VOL)
+        animateString(si, time, gen, 190)
       } else {
-        pluckMutedAt(freq, time, 0.72)  // 切音音色
+        pluckMutedAt(freq, time, 0.72)
+        animateString(si, time, gen, 190)
+        animateFlash(time, gen, 160)
       }
-      animateString(bassIdx, time, gen, 190)
-      if (rawStep === MUTE_BASS) animateFlash(time, gen, 160)
       return
     }
 
-    // ② 多弦同时（如 [4,5]）
     if (Array.isArray(rawStep)) {
       const playable = rawStep.filter(i => pos.frets[i] !== -1)
       if (playable.length === 0) return
-      playable.forEach(strIdx => {
-        const freq = getStringFreq(pos, strIdx)
+      playable.forEach(si => {
+        const freq = getFreq(pos, si)
         if (freq !== null) pluckStringAt(freq, time, TREBLE_VOL * 1.1)
       })
-      // 高亮最高音弦（视觉上最显眼）
       animateString(playable[playable.length - 1], time, gen, 200)
       return
     }
 
-    // ③ 普通单弦
-    const freq = getStringFreq(pos, rawStep)
+    // 普通单弦
+    const freq = getFreq(pos, rawStep)
     if (freq === null) return
-    pluckStringAt(freq, time, isBassStep ? BASS_VOL : TREBLE_VOL)
+    pluckStringAt(freq, time, isBass ? BASS_VOL : TREBLE_VOL)
     animateString(rawStep, time, gen)
-  }, [animateString, animateFlash])
-
-  // ─── 扫弦 ────────────────────────────────────────────────────
-  const scheduleStrum = useCallback((beat: StrumBeat, beatTime: number, gen: number) => {
-    const pos = posRef.current
-    if (!pos) return
-
-    const strings = beat.dir === 'down' ? [0, 1, 2, 3, 4, 5] : [5, 4, 3, 2, 1, 0]
-    const delayPerStr = SWEEP_DURATION / 5
-
-    strings.forEach((strIdx, i) => {
-      const freq = getStringFreq(pos, strIdx)
-      if (freq === null) return
-      const vol = beat.dir === 'down'
-        ? beat.vel * (0.6 + i * 0.01)
-        : beat.vel * (0.55 - i * 0.01)
-      pluckStringAt(freq, beatTime + i * delayPerStr, vol)
-    })
-
-    const flashDuration = Math.min((60 / bpmRef.current) * 700, 280)
-    animateFlash(beatTime, gen, flashDuration)
-  }, [animateFlash])
+  }, [animateString, animateFlash, doStrum])
 
   // ─── 调度器主循环 ─────────────────────────────────────────────
   const schedulerTick = useCallback(() => {
-    const ctx  = audioEngine.getContext()
-    const gen  = genRef.current
-    const pat  = patternRef.current
-    const bpm  = bpmRef.current
+    const ctx = audioEngine.getContext()
+    const gen = genRef.current
+    const pat = patternRef.current
+    const bpm = bpmRef.current
     const lookahead = 0.1
 
     if (pat === 'strum') {
-      const secPerBeat = 60 / bpm
+      const sPerBeat = 60 / bpm
       while (nextTimeRef.current < ctx.currentTime + lookahead) {
-        scheduleStrum(STRUM_BEATS[stepRef.current % STRUM_BEATS.length], nextTimeRef.current, gen)
-        nextTimeRef.current += secPerBeat
+        doStrum(
+          STRUM_BEATS[stepRef.current % STRUM_BEATS.length].dir,
+          STRUM_BEATS[stepRef.current % STRUM_BEATS.length].vel,
+          nextTimeRef.current, gen
+        )
+        nextTimeRef.current += sPerBeat
         stepRef.current++
       }
       return
     }
 
-    // 指法模式
-    let patternSteps: PatternStep[]
-    let secPerStep: number
-    if (pat === '53231323') {
-      patternSteps = PATTERN_53231323
-      secPerStep   = 60 / bpm / 2  // 8分音符
+    let steps: PatternStep[]
+    let sPerStep: number
+    if (pat === 'custom') {
+      steps    = customStepsRef.current
+      sPerStep = customSecRef.current
+    } else if (pat === '53231323') {
+      steps = PATTERN_53231323; sPerStep = 60 / bpm / 2
     } else if (pat === 'x3231323') {
-      patternSteps = PATTERN_X3231323
-      secPerStep   = 60 / bpm / 2
+      steps = PATTERN_X3231323; sPerStep = 60 / bpm / 2
     } else {
-      // '3_12_3': 四分音符
-      patternSteps = PATTERN_3_12_3
-      secPerStep   = 60 / bpm
+      steps = PATTERN_3_12_3; sPerStep = 60 / bpm
     }
+
+    if (steps.length === 0) return
 
     while (nextTimeRef.current < ctx.currentTime + lookahead) {
-      const step    = stepRef.current % patternSteps.length
-      const isBass  = step === 0
-      scheduleStep(patternSteps[step], nextTimeRef.current, isBass, gen)
-      nextTimeRef.current += secPerStep
+      const step = stepRef.current % steps.length
+      scheduleStep(steps[step], nextTimeRef.current, step === 0, gen)
+      nextTimeRef.current += sPerStep
       stepRef.current++
     }
-  }, [scheduleStep, scheduleStrum])
+  }, [scheduleStep, doStrum])
 
+  // ─── 公开 API ────────────────────────────────────────────────
   const stop = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
+    if (intervalRef.current !== null) { clearInterval(intervalRef.current); intervalRef.current = null }
     genRef.current++
     stopAllNodes()
     setArpeggioState(s => ({ ...s, isPlaying: false, activeString: null, isStrumBeat: false }))
   }, [])
 
-  const play = useCallback((position: ChordPosition, pattern: ArpeggioPattern, bpm: number) => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
+  const play = useCallback((
+    position: ChordPosition,
+    pattern: ArpeggioPattern,
+    bpm: number,
+    customConfig?: CustomConfig
+  ) => {
+    if (intervalRef.current !== null) { clearInterval(intervalRef.current); intervalRef.current = null }
     genRef.current++
     stopAllNodes()
+
+    if (pattern === 'custom' && customConfig) {
+      customStepsRef.current = customConfig.steps.map(customKindToStep)
+      customSecRef.current   = customConfig.duration === 'quarter' ? 60 / bpm : 60 / bpm / 2
+    }
 
     posRef.current    = position
     patternRef.current = pattern
@@ -233,7 +250,13 @@ export function useArpeggio() {
     intervalRef.current = setInterval(schedulerTick, 25)
   }, [schedulerTick])
 
+  // 播放中实时更新自定义节奏型（不重启）
+  const updateCustomPattern = useCallback((config: CustomConfig, bpm: number) => {
+    customStepsRef.current = config.steps.map(customKindToStep)
+    customSecRef.current   = config.duration === 'quarter' ? 60 / bpm : 60 / bpm / 2
+  }, [])
+
   useEffect(() => () => stop(), [stop])
 
-  return { arpeggioState, play, stop }
+  return { arpeggioState, play, stop, updateCustomPattern }
 }

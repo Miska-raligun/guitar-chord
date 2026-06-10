@@ -5,46 +5,64 @@ import RootSelector from './RootSelector'
 import SuffixSelector from './SuffixSelector'
 import PositionSelector from './PositionSelector'
 import ArpeggioPlayer from './ArpeggioPlayer'
+import CustomPatternEditor from './CustomPatternEditor'
 import ChordDiagram from '../chord/ChordDiagram'
 import ChordLabel from '../chord/ChordLabel'
-import type { ArpeggioPattern } from '../../types/audio'
+import type { ArpeggioPattern, CustomConfig, CustomDuration, CustomStepKind } from '../../types/audio'
+
+const DEFAULT_CUSTOM_STEPS: CustomStepKind[] = ['根', '3', '12', '3']
+const DEFAULT_CUSTOM_DURATION: CustomDuration = 'quarter'
 
 export default function BrowseTab() {
   const { keys, suffixes, getChordEntry } = useChordDb()
-  const { arpeggioState, play, stop } = useArpeggio()
+  const { arpeggioState, play, stop, updateCustomPattern } = useArpeggio()
 
   const [selectedRoot, setSelectedRoot] = useState(keys[0] ?? 'C')
   const [selectedSuffix, setSelectedSuffix] = useState(suffixes[0] ?? 'major')
   const [positionIndex, setPositionIndex] = useState(0)
   const [localBpm, setLocalBpm] = useState(80)
   const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('53231323')
-
+  const [customSteps, setCustomSteps] = useState<CustomStepKind[]>(DEFAULT_CUSTOM_STEPS)
+  const [customDuration, setCustomDuration] = useState<CustomDuration>(DEFAULT_CUSTOM_DURATION)
 
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
   const currentPosition = positions[positionIndex] ?? null
+
+  const customConfig: CustomConfig = { steps: customSteps, duration: customDuration }
 
   useEffect(() => {
     setPositionIndex(0)
     stop()
   }, [selectedRoot, selectedSuffix, stop])
 
+  // 播放中实时更新自定义节奏型
+  useEffect(() => {
+    if (arpeggioState.isPlaying && localPattern === 'custom') {
+      updateCustomPattern(customConfig, localBpm)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customSteps, customDuration])
+
   function handlePlay() {
     if (!currentPosition) return
-    play(currentPosition, localPattern, localBpm)
+    play(currentPosition, localPattern, localBpm,
+      localPattern === 'custom' ? customConfig : undefined)
   }
 
   function handlePatternChange(pattern: ArpeggioPattern) {
     setLocalPattern(pattern)
     if (arpeggioState.isPlaying && currentPosition) {
-      play(currentPosition, pattern, localBpm)
+      play(currentPosition, pattern, localBpm,
+        pattern === 'custom' ? customConfig : undefined)
     }
   }
 
   function handleBpmChange(bpm: number) {
     setLocalBpm(bpm)
     if (arpeggioState.isPlaying && currentPosition) {
-      play(currentPosition, localPattern, bpm)
+      play(currentPosition, localPattern, bpm,
+        localPattern === 'custom' ? customConfig : undefined)
     }
   }
 
@@ -57,11 +75,7 @@ export default function BrowseTab() {
 
       <div>
         <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">和弦类型</div>
-        <SuffixSelector
-          suffixes={suffixes}
-          selected={selectedSuffix}
-          onChange={setSelectedSuffix}
-        />
+        <SuffixSelector suffixes={suffixes} selected={selectedSuffix} onChange={setSelectedSuffix} />
       </div>
 
       {currentPosition ? (
@@ -80,7 +94,7 @@ export default function BrowseTab() {
             />
           </div>
 
-          <div className="bg-zinc-800/50 rounded-xl p-4">
+          <div className="bg-zinc-800/50 rounded-xl p-4 space-y-4">
             <ArpeggioPlayer
               position={currentPosition}
               arpeggioState={{ ...arpeggioState, bpm: localBpm, pattern: localPattern }}
@@ -89,6 +103,18 @@ export default function BrowseTab() {
               onPatternChange={handlePatternChange}
               onBpmChange={handleBpmChange}
             />
+
+            {/* 自定义编辑器：仅在选中 custom 时展开 */}
+            {localPattern === 'custom' && (
+              <div className="border-t border-zinc-700 pt-4">
+                <CustomPatternEditor
+                  steps={customSteps}
+                  duration={customDuration}
+                  onStepsChange={setCustomSteps}
+                  onDurationChange={setCustomDuration}
+                />
+              </div>
+            )}
           </div>
         </>
       ) : (

@@ -11,10 +11,11 @@ interface Props {
 }
 
 const PATTERNS: { id: ArpeggioPattern; title: string; sub: string }[] = [
-  { id: '53231323', title: '根音·3231323', sub: '民谣指法' },
-  { id: 'x3231323', title: 'x·3231323',   sub: '切音指法' },
-  { id: '3_12_3',   title: '根音·3·(12)·3', sub: '抒情指法' },
-  { id: 'strum',    title: 'DDUUDU',       sub: '扫弦' },
+  { id: '53231323', title: '根·3231323', sub: '民谣指法' },
+  { id: 'x3231323', title: 'x·3231323',  sub: '切音指法' },
+  { id: '3_12_3',   title: '根·3·12·3', sub: '抒情指法' },
+  { id: 'strum',    title: 'DDUUDU',     sub: '扫弦' },
+  { id: 'custom',   title: '自定义',     sub: '节奏型' },
 ]
 
 export default function ArpeggioPlayer({
@@ -26,8 +27,9 @@ export default function ArpeggioPlayer({
     <div className="w-full space-y-3">
       <div className="text-xs text-zinc-500 uppercase tracking-wider">伴奏节奏型</div>
 
+      {/* 2列×3行，最后一个占满一行 */}
       <div className="grid grid-cols-2 gap-2">
-        {PATTERNS.map(({ id, title, sub }) => (
+        {PATTERNS.slice(0, 4).map(({ id, title, sub }) => (
           <button
             key={id}
             onClick={() => onPatternChange(id)}
@@ -38,12 +40,23 @@ export default function ArpeggioPlayer({
             }`}
           >
             <span className="font-mono font-bold text-[11px]">{title}</span>
-            <span className={`mt-0.5 text-[10px] ${pattern === id ? 'text-zinc-800' : 'text-zinc-500'}`}>
-              {sub}
-            </span>
+            <span className={`mt-0.5 text-[10px] ${pattern === id ? 'text-zinc-800' : 'text-zinc-500'}`}>{sub}</span>
           </button>
         ))}
       </div>
+
+      {/* 自定义节奏型独占一行 */}
+      <button
+        onClick={() => onPatternChange('custom')}
+        className={`w-full py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
+          pattern === 'custom'
+            ? 'bg-amber-500 text-zinc-950'
+            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-dashed border-zinc-600'
+        }`}
+      >
+        <span className="text-base">✎</span>
+        <span>自定义节奏型</span>
+      </button>
 
       <div className="flex items-center gap-3">
         <span className="text-xs text-zinc-400 w-12">速度</span>
