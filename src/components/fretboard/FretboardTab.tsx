@@ -10,10 +10,11 @@ const STRINGS = [
 ]
 
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
-const SOLFEGE = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si']
-const NUMS = ['1', '2', '3', '4', '5', '6', '7']
-const FRET_MARKERS = new Set([3, 5, 7, 9, 12])
-const NUM_FRETS = 13
+const SOLFEGE  = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si']
+const NUMS     = ['1',  '2',  '3',  '4',  '5',   '6',  '7' ]
+
+const SINGLE_DOTS = new Set([3, 5, 7, 9, 15, 17, 19, 21])
+const DOUBLE_DOTS = new Set([12, 24])
 
 const ROOT_OPTIONS = [
   { label: 'C',  semitone: 0  },
@@ -36,7 +37,6 @@ function getNoteInfo(semitone: number, keyRoot: number) {
   if (dIdx !== -1) {
     return { solfege: SOLFEGE[dIdx], num: NUMS[dIdx], isDiatonic: true, isRoot: interval === 0 }
   }
-  // Find the nearest lower scale degree for chromatic note labeling
   let lowerIdx = 0
   for (let i = MAJOR_INTERVALS.length - 1; i >= 0; i--) {
     if (MAJOR_INTERVALS[i] < interval) { lowerIdx = i; break }
@@ -49,6 +49,7 @@ export default function FretboardTab() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
+
       {/* 调性选择 */}
       <div>
         <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">调性</div>
@@ -82,64 +83,64 @@ export default function FretboardTab() {
         </span>
       </div>
 
-      {/* 指板（横向滚动） */}
-      <div className="overflow-x-auto -mx-4 pb-2">
-        <div className="inline-flex flex-col px-4" style={{ minWidth: 'max-content' }}>
+      {/* 指板主体（竖向：每行一品，每列一弦） */}
+      <div className="rounded-xl overflow-hidden border border-zinc-700">
 
-          {/* 品格编号行 */}
-          <div className="flex mb-0.5">
-            <div className="w-8 flex-shrink-0" />
-            {Array.from({ length: NUM_FRETS }, (_, f) => (
-              <div key={f} className="w-11 flex-shrink-0 text-center text-[9px] text-zinc-600 leading-tight">
-                {f === 0 ? '空弦' : f}
-              </div>
-            ))}
-          </div>
-
-          {/* 品记点行 */}
-          <div className="flex mb-1">
-            <div className="w-8 flex-shrink-0" />
-            {Array.from({ length: NUM_FRETS }, (_, f) => (
-              <div key={f} className="w-11 flex-shrink-0 h-3 flex items-center justify-center">
-                {f === 12
-                  ? <span className="text-[6px] text-zinc-500 tracking-[3px]">●●</span>
-                  : FRET_MARKERS.has(f)
-                  ? <span className="text-[7px] text-zinc-500">●</span>
-                  : null}
-              </div>
-            ))}
-          </div>
-
-          {/* 弦行 */}
+        {/* 弦标题行（琴枕上方） */}
+        <div className="flex border-b-[3px] border-zinc-400 bg-zinc-800/80">
+          <div className="w-9 flex-shrink-0 border-r border-zinc-700" />
           {STRINGS.map((str, si) => (
-            <div key={si} className="flex">
-              {/* 弦标签 */}
-              <div className="w-8 flex-shrink-0 flex flex-col items-center justify-center leading-none">
-                <span className="text-[10px] text-zinc-400 font-mono">{str.num}</span>
-                <span className="text-[9px] text-zinc-600 font-mono">{str.name}</span>
+            <div
+              key={si}
+              className={`flex-1 flex flex-col items-center justify-center py-2 ${
+                si > 0 ? 'border-l border-zinc-700' : ''
+              }`}
+            >
+              <span className="text-xs text-zinc-300 font-mono leading-none">{str.num}</span>
+              <span className="text-[10px] text-zinc-500 font-mono leading-none mt-0.5">{str.name}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 品格行 0-24 */}
+        {Array.from({ length: 25 }, (_, f) => {
+          const isOctave = DOUBLE_DOTS.has(f)
+          const hasDot   = SINGLE_DOTS.has(f)
+
+          return (
+            <div
+              key={f}
+              className={`flex ${
+                isOctave ? 'border-b-2 border-zinc-500' : 'border-b border-zinc-800'
+              }`}
+            >
+              {/* 品格编号 + 品记点 */}
+              <div className="w-9 flex-shrink-0 flex flex-col items-center justify-center gap-0.5 bg-zinc-900 border-r border-zinc-700 py-1">
+                <span className="text-[11px] text-zinc-400 font-mono leading-none">
+                  {f === 0 ? '空' : f}
+                </span>
+                {isOctave && <span className="text-[7px] text-amber-500/70 leading-none">●●</span>}
+                {hasDot   && <span className="text-[7px] text-zinc-500 leading-none">●</span>}
               </div>
 
-              {/* 音格 */}
-              {Array.from({ length: NUM_FRETS }, (_, f) => {
+              {/* 各弦音格 */}
+              {STRINGS.map((str, si) => {
                 const semitone = (str.openSemitone + f) % 12
                 const { solfege, num, isDiatonic, isRoot } = getNoteInfo(semitone, keyRoot)
 
                 return (
                   <div
-                    key={f}
-                    className={`w-11 h-12 flex-shrink-0 flex flex-col items-center justify-center
-                      border-b border-r border-zinc-800
-                      ${si === 0 ? 'border-t border-t-zinc-800' : ''}
-                      ${f === 0 ? 'border-r-2 border-r-zinc-500' : ''}
-                      ${isRoot ? 'bg-amber-500' : isDiatonic ? 'bg-zinc-700' : 'bg-zinc-900'}
-                    `}
+                    key={si}
+                    className={`flex-1 h-10 flex flex-col items-center justify-center border-l border-zinc-800 ${
+                      isRoot ? 'bg-amber-500' : isDiatonic ? 'bg-zinc-700' : 'bg-zinc-900'
+                    }`}
                   >
-                    <span className={`text-[8px] leading-none mb-0.5 ${
+                    <span className={`text-[9px] leading-none mb-[2px] ${
                       isRoot ? 'text-zinc-900' : isDiatonic ? 'text-amber-400' : 'text-zinc-600'
                     }`}>
                       {solfege}
                     </span>
-                    <span className={`text-[11px] font-bold leading-none ${
+                    <span className={`text-xs font-bold leading-none ${
                       isRoot ? 'text-zinc-950' : isDiatonic ? 'text-amber-100' : 'text-zinc-500'
                     }`}>
                       {num}
@@ -148,11 +149,11 @@ export default function FretboardTab() {
                 )
               })}
             </div>
-          ))}
-        </div>
+          )
+        })}
       </div>
 
-      <p className="text-xs text-zinc-600 text-center">大调音阶 · 横向滑动查看更多品格</p>
+      <p className="text-xs text-zinc-600 text-center pb-4">大调音阶 · 切换调性可实时刷新</p>
     </div>
   )
 }
