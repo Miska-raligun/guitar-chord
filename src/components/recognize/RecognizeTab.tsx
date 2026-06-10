@@ -5,7 +5,8 @@ import MatchList from './MatchList'
 
 export default function RecognizeTab() {
   const { isListening, matches, error, start, stop } = useRecognizer()
-  const topMatch = matches[0] ?? null
+  // Only display results with meaningful confidence — below 0.3 is likely noise
+  const topMatch = matches.length > 0 && matches[0].confidence > 0.3 ? matches[0] : null
 
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-6">
