@@ -27,6 +27,7 @@ export function normalizeKey(displayRoot: string): string {
 
 export function prettifySuffix(suffix: string): string {
   const map: Record<string, string> = {
+    '5': '强力和弦',
     major: '大调',
     minor: '小调',
     '7': '属七',

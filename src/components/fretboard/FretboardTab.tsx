@@ -1,33 +1,66 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { pluckStringAt } from '../../audio/karplusStrong'
 import audioEngine from '../../audio/AudioEngine'
-import { OPEN_STRING_FREQS } from '../../types/chord'
+
+// ─── 调音配置 ──────────────────────────────────────────────────
+const TUNINGS = [
+  {
+    key: 'standard',
+    label: '标准 EADGBe',
+    strings: [
+      { name: 'E', openSemitone: 4,  freq: 82.41  },
+      { name: 'A', openSemitone: 9,  freq: 110.0  },
+      { name: 'D', openSemitone: 2,  freq: 146.83 },
+      { name: 'G', openSemitone: 7,  freq: 196.0  },
+      { name: 'B', openSemitone: 11, freq: 246.94 },
+      { name: 'e', openSemitone: 4,  freq: 329.63 },
+    ],
+  },
+  {
+    key: 'dropD',
+    label: 'Drop D',
+    strings: [
+      { name: 'D', openSemitone: 2,  freq: 73.42  },
+      { name: 'A', openSemitone: 9,  freq: 110.0  },
+      { name: 'D', openSemitone: 2,  freq: 146.83 },
+      { name: 'G', openSemitone: 7,  freq: 196.0  },
+      { name: 'B', openSemitone: 11, freq: 246.94 },
+      { name: 'e', openSemitone: 4,  freq: 329.63 },
+    ],
+  },
+  {
+    key: 'dropC',
+    label: 'Drop C',
+    strings: [
+      { name: 'C', openSemitone: 0,  freq: 65.41  },
+      { name: 'G', openSemitone: 7,  freq: 98.0   },
+      { name: 'C', openSemitone: 0,  freq: 130.81 },
+      { name: 'F', openSemitone: 5,  freq: 174.61 },
+      { name: 'A', openSemitone: 9,  freq: 220.0  },
+      { name: 'd', openSemitone: 2,  freq: 293.66 },
+    ],
+  },
+] as const
+
+type TuningKey = typeof TUNINGS[number]['key']
+
+// ─── 音阶配置 ──────────────────────────────────────────────────
+const SCALE_OPTIONS = [
+  { key: 'all',        label: '全部',    intervals: null },
+  { key: 'major',      label: '大调',    intervals: [0, 2, 4, 5, 7, 9, 11] },
+  { key: 'natMinor',   label: '自然小调', intervals: [0, 2, 3, 5, 7, 8, 10] },
+  { key: 'majorPenta', label: '大调五声', intervals: [0, 2, 4, 7, 9] },
+  { key: 'minorPenta', label: '小调五声', intervals: [0, 3, 5, 7, 10] },
+  { key: 'blues',      label: '布鲁斯',  intervals: [0, 3, 5, 6, 7, 10] },
+] as const
+
+type ScaleKey = typeof SCALE_OPTIONS[number]['key']
 
 // ─── 常量 ─────────────────────────────────────────────────────
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
 const SOLFEGE = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si']
 const NUMS    = ['1',  '2',  '3',  '4',  '5',   '6',  '7' ]
-
-// OPEN_STRING_FREQS 索引：0=⑥低E, 5=①高e
-// 横向布局：①e 在上，⑥E 在下（如持琴俯视）
-const H_STRINGS = [
-  { num: '①', name: 'e', openSemitone: 4,  freqIdx: 5 },
-  { num: '②', name: 'B', openSemitone: 11, freqIdx: 4 },
-  { num: '③', name: 'G', openSemitone: 7,  freqIdx: 3 },
-  { num: '④', name: 'D', openSemitone: 2,  freqIdx: 2 },
-  { num: '⑤', name: 'A', openSemitone: 9,  freqIdx: 1 },
-  { num: '⑥', name: 'E', openSemitone: 4,  freqIdx: 0 },
-]
-
-// 竖向布局：⑥E 在左列，①e 在右列
-const V_STRINGS = [
-  { num: '⑥', name: 'E', openSemitone: 4,  freqIdx: 0 },
-  { num: '⑤', name: 'A', openSemitone: 9,  freqIdx: 1 },
-  { num: '④', name: 'D', openSemitone: 2,  freqIdx: 2 },
-  { num: '③', name: 'G', openSemitone: 7,  freqIdx: 3 },
-  { num: '②', name: 'B', openSemitone: 11, freqIdx: 4 },
-  { num: '①', name: 'e', openSemitone: 4,  freqIdx: 5 },
-]
+const STRING_NUMS = ['⑥', '⑤', '④', '③', '②', '①'] as const
 
 const SINGLE_DOTS = new Set([3, 5, 7, 9, 15, 17, 19, 21])
 const DOUBLE_DOTS = new Set([12, 24])
@@ -55,41 +88,55 @@ function getNoteInfo(semitone: number, keyRoot: number) {
   return { solfege: '♯' + SOLFEGE[lowerIdx], num: '♯' + NUMS[lowerIdx], isDiatonic: false, isRoot: false }
 }
 
-// ─── 音格组件（定义在外部避免每次渲染重新生成类型）────────────────
+// ─── 音格组件 ─────────────────────────────────────────────────
 interface NoteCellProps {
   freqIdx: number
   fret: number
   openSemitone: number
   keyRoot: number
+  scaleIntervals: readonly number[] | null
   activeCell: string | null
   className: string
   onPlay: (freqIdx: number, fret: number, cellKey: string) => void
 }
 
-function NoteCell({ freqIdx, fret, openSemitone, keyRoot, activeCell, className, onPlay }: NoteCellProps) {
+function NoteCell({ freqIdx, fret, openSemitone, keyRoot, scaleIntervals, activeCell, className, onPlay }: NoteCellProps) {
   const semitone = (openSemitone + fret) % 12
+  const interval = (semitone - keyRoot + 12) % 12
+  const inScale = scaleIntervals === null || scaleIntervals.includes(interval)
   const { solfege, num, isDiatonic, isRoot } = getNoteInfo(semitone, keyRoot)
   const cellKey = `${freqIdx}-${fret}`
   const isActive = activeCell === cellKey
+
+  if (!inScale) {
+    return (
+      <button
+        onClick={() => onPlay(freqIdx, fret, cellKey)}
+        className={`flex items-center justify-center bg-zinc-900 border-l border-zinc-800 select-none transition-[filter]
+          ${isActive ? 'brightness-200' : 'hover:brightness-125'}
+          ${className}`}
+      >
+        <span className="w-1 h-1 rounded-full bg-zinc-800" />
+      </button>
+    )
+  }
+
+  // When scale is active, treat non-major-diatonic notes as diatonic-styled if they're in the scale
+  const effectiveDiatonic = isDiatonic || scaleIntervals !== null
+  const bgClass = isRoot ? 'bg-amber-500' : (effectiveDiatonic ? 'bg-zinc-700' : 'bg-zinc-900')
+  const topTextClass = isRoot ? 'text-zinc-900' : (effectiveDiatonic ? 'text-amber-400' : 'text-zinc-600')
+  const botTextClass = isRoot ? 'text-zinc-950' : (effectiveDiatonic ? 'text-amber-100' : 'text-zinc-500')
 
   return (
     <button
       onClick={() => onPlay(freqIdx, fret, cellKey)}
       className={`flex flex-col items-center justify-center border-l border-zinc-800 select-none transition-[filter]
-        ${isRoot ? 'bg-amber-500' : isDiatonic ? 'bg-zinc-700' : 'bg-zinc-900'}
+        ${bgClass}
         ${isActive ? 'brightness-150' : 'hover:brightness-110 active:brightness-125'}
         ${className}`}
     >
-      <span className={`text-[9px] leading-none mb-[2px] ${
-        isRoot ? 'text-zinc-900' : isDiatonic ? 'text-amber-400' : 'text-zinc-600'
-      }`}>
-        {solfege}
-      </span>
-      <span className={`text-xs font-bold leading-none ${
-        isRoot ? 'text-zinc-950' : isDiatonic ? 'text-amber-100' : 'text-zinc-500'
-      }`}>
-        {num}
-      </span>
+      <span className={`text-[9px] leading-none mb-[2px] ${topTextClass}`}>{solfege}</span>
+      <span className={`text-xs font-bold leading-none ${botTextClass}`}>{num}</span>
     </button>
   )
 }
@@ -99,14 +146,31 @@ export default function FretboardTab() {
   const [keyRoot,      setKeyRoot]      = useState(0)
   const [isHorizontal, setIsHorizontal] = useState(true)
   const [activeCell,   setActiveCell]   = useState<string | null>(null)
-  const clearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [tuningKey,    setTuningKey]    = useState<TuningKey>('standard')
+  const [scaleKey,     setScaleKey]     = useState<ScaleKey>('all')
 
-  useEffect(() => () => { if (clearRef.current) clearTimeout(clearRef.current) }, [])
+  const clearRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tuningRef = useRef<typeof TUNINGS[number]>(TUNINGS[0])
+
+  const currentTuning = TUNINGS.find(t => t.key === tuningKey) ?? TUNINGS[0]
+  tuningRef.current = currentTuning
+
+  const scaleIntervals = SCALE_OPTIONS.find(s => s.key === scaleKey)?.intervals ?? null
+
+  // Horizontal: ① (high e) → ⑥ (low E), reversed from tuning order
+  const hStrings = [...currentTuning.strings]
+    .map((s, i) => ({ num: STRING_NUMS[i], name: s.name, openSemitone: s.openSemitone, freqIdx: i }))
+    .reverse()
+
+  // Vertical: ⑥ (low E) → ① (high e), natural tuning order
+  const vStrings = currentTuning.strings.map((s, i) => ({
+    num: STRING_NUMS[i], name: s.name, openSemitone: s.openSemitone, freqIdx: i,
+  }))
 
   const playNote = useCallback((freqIdx: number, fret: number, cellKey: string) => {
     audioEngine.resume()
     const ctx = audioEngine.getContext()
-    const freq = OPEN_STRING_FREQS[freqIdx] * Math.pow(2, fret / 12)
+    const freq = tuningRef.current.strings[freqIdx].freq * Math.pow(2, fret / 12)
     pluckStringAt(freq, ctx.currentTime + 0.01, 0.7)
     setActiveCell(cellKey)
     if (clearRef.current) clearTimeout(clearRef.current)
@@ -116,9 +180,29 @@ export default function FretboardTab() {
   return (
     <div className="flex flex-col gap-4 px-4 py-5">
 
-      {/* 调性选择 */}
+      {/* 调音选择 */}
       <div>
-        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">调性</div>
+        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">调音</div>
+        <div className="flex gap-1.5">
+          {TUNINGS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTuningKey(t.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                tuningKey === t.key
+                  ? 'bg-amber-500 text-zinc-950'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 调性选择（同时作为音阶根音） */}
+      <div>
+        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">调性 / 音阶根音</div>
         <div className="grid grid-cols-6 gap-1.5">
           {ROOT_OPTIONS.map(({ label, semitone }) => (
             <button
@@ -136,6 +220,26 @@ export default function FretboardTab() {
         </div>
       </div>
 
+      {/* 音阶选择 */}
+      <div>
+        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">音阶</div>
+        <div className="flex flex-wrap gap-1.5">
+          {SCALE_OPTIONS.map(s => (
+            <button
+              key={s.key}
+              onClick={() => setScaleKey(s.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                scaleKey === s.key
+                  ? 'bg-amber-500 text-zinc-950'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 图例 + 布局切换 */}
       <div className="flex items-center justify-between">
         <div className="flex gap-3 text-xs text-zinc-500">
@@ -143,11 +247,13 @@ export default function FretboardTab() {
             <span className="inline-block w-3 h-3 rounded-sm bg-amber-500" />根音
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-zinc-700" />调内音
+            <span className="inline-block w-3 h-3 rounded-sm bg-zinc-700" />音阶音
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-zinc-900 border border-zinc-700" />调外音
-          </span>
+          {scaleKey === 'all' && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm bg-zinc-900 border border-zinc-700" />调外音
+            </span>
+          )}
         </div>
 
         <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-xs">
@@ -180,9 +286,8 @@ export default function FretboardTab() {
           <div className="overflow-x-auto">
             <div className="inline-flex flex-col">
 
-              {/* 品格编号行（带品记点） */}
+              {/* 品格编号行 */}
               <div className="flex border-b-[3px] border-zinc-400 bg-zinc-900">
-                {/* 左上角占位（sticky） */}
                 <div className="sticky left-0 z-10 w-10 flex-shrink-0 bg-zinc-900 border-r border-zinc-700" />
                 {Array.from({ length: 25 }, (_, f) => (
                   <div key={f} className="w-10 flex-shrink-0 h-7 flex flex-col items-center justify-center gap-[1px]">
@@ -193,19 +298,16 @@ export default function FretboardTab() {
                 ))}
               </div>
 
-              {/* 弦行：①e（顶）→ ⑥E（底） */}
-              {H_STRINGS.map((str, si) => (
+              {/* 弦行：① (top) → ⑥ (bottom) */}
+              {hStrings.map((str, si) => (
                 <div
-                  key={str.num}
-                  className={`flex ${si < H_STRINGS.length - 1 ? 'border-b border-zinc-800' : ''}`}
+                  key={`${str.freqIdx}-${str.name}`}
+                  className={`flex ${si < hStrings.length - 1 ? 'border-b border-zinc-800' : ''}`}
                 >
-                  {/* 弦标签（sticky 不随横向滚动消失） */}
                   <div className="sticky left-0 z-10 w-10 flex-shrink-0 flex flex-col items-center justify-center bg-zinc-900 border-r border-zinc-700">
                     <span className="text-[10px] text-zinc-300 font-mono leading-none">{str.num}</span>
                     <span className="text-[9px] text-zinc-500 font-mono leading-none">{str.name}</span>
                   </div>
-
-                  {/* 25 品音格 */}
                   {Array.from({ length: 25 }, (_, f) => (
                     <NoteCell
                       key={`${str.freqIdx}-${f}`}
@@ -213,6 +315,7 @@ export default function FretboardTab() {
                       fret={f}
                       openSemitone={str.openSemitone}
                       keyRoot={keyRoot}
+                      scaleIntervals={scaleIntervals}
                       activeCell={activeCell}
                       onPlay={playNote}
                       className="w-10 h-11 flex-shrink-0"
@@ -223,7 +326,7 @@ export default function FretboardTab() {
             </div>
           </div>
           <div className="text-[10px] text-zinc-600 text-center py-1.5 border-t border-zinc-800">
-            ⑥E低音弦在下方 · 左右滑动查看全部品格 · 点击发音
+            ⑥低音弦在下方 · 左右滑动查看全部品格 · 点击发音
           </div>
         </div>
       )}
@@ -232,12 +335,12 @@ export default function FretboardTab() {
       {!isHorizontal && (
         <div className="rounded-xl overflow-hidden border border-zinc-700">
 
-          {/* 弦标题（琴枕上方） */}
+          {/* 弦标题 */}
           <div className="flex border-b-[3px] border-zinc-400 bg-zinc-800/60">
             <div className="w-9 flex-shrink-0 border-r border-zinc-700" />
-            {V_STRINGS.map((str, si) => (
+            {vStrings.map((str, si) => (
               <div
-                key={str.num}
+                key={`${str.freqIdx}-${str.name}`}
                 className={`flex-1 flex flex-col items-center justify-center py-2 ${si > 0 ? 'border-l border-zinc-700' : ''}`}
               >
                 <span className="text-xs text-zinc-300 font-mono leading-none">{str.num}</span>
@@ -252,21 +355,19 @@ export default function FretboardTab() {
               key={f}
               className={`flex ${DOUBLE_DOTS.has(f) ? 'border-b-2 border-zinc-500' : 'border-b border-zinc-800'}`}
             >
-              {/* 品格编号 + 品记点 */}
               <div className="w-9 flex-shrink-0 flex flex-col items-center justify-center gap-[2px] bg-zinc-900 border-r border-zinc-700 py-1">
                 <span className="text-[11px] text-zinc-400 font-mono leading-none">{f === 0 ? '空' : f}</span>
                 {DOUBLE_DOTS.has(f) && <span className="text-[7px] text-amber-400/60 leading-none">●●</span>}
                 {SINGLE_DOTS.has(f) && <span className="text-[7px] text-zinc-600 leading-none">●</span>}
               </div>
-
-              {/* 各弦音格 */}
-              {V_STRINGS.map((str) => (
+              {vStrings.map((str) => (
                 <NoteCell
                   key={`${str.freqIdx}-${f}`}
                   freqIdx={str.freqIdx}
                   fret={f}
                   openSemitone={str.openSemitone}
                   keyRoot={keyRoot}
+                  scaleIntervals={scaleIntervals}
                   activeCell={activeCell}
                   onPlay={playNote}
                   className="flex-1 h-10"
