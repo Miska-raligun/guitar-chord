@@ -96,18 +96,21 @@ function parseComposition(raw: string): AiComposition {
     : []
   while (chords.length < 8) chords.push({ root: null, suffix: null, positionIndex: 0 })
 
+  // AI returns up to 8 eighth-note slots; map each slot k → master slot k*2
   const melody: (MelodyNote | null)[][] = Array.isArray(obj.melody)
     ? obj.melody.slice(0, 8).map((bar: ({ semitone?: number } | null)[]) => {
-        const slots: (MelodyNote | null)[] = Array.isArray(bar)
-          ? bar.slice(0, 8).map((n: { semitone?: number } | null) =>
-              n && typeof n.semitone === 'number' ? { semitone: Math.max(0, Math.min(11, n.semitone)) } : null
-            )
-          : []
-        while (slots.length < 8) slots.push(null)
-        return slots
+        const master: (MelodyNote | null)[] = Array(16).fill(null)
+        if (Array.isArray(bar)) {
+          bar.slice(0, 8).forEach((n: { semitone?: number } | null, i: number) => {
+            if (n && typeof n.semitone === 'number') {
+              master[i * 2] = { semitone: Math.max(0, Math.min(11, n.semitone)) }
+            }
+          })
+        }
+        return master
       })
     : []
-  while (melody.length < 8) melody.push(Array(8).fill(null))
+  while (melody.length < 8) melody.push(Array(16).fill(null))
 
   return { bpm, pattern, keyRoot, chords, melody }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ChordSlot, MelodyNote, SequencerState } from '../../types/audio'
-import { getStepsPerBar } from '../../hooks/useSequencer'
+import { getMelodyDisplaySlots, cellToMasterSlot } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
 import NotePicker from './NotePicker'
 import { SOLFEGE } from './NotePicker'
@@ -8,26 +8,28 @@ import { SOLFEGE } from './NotePicker'
 interface Props {
   state: SequencerState
   onChordChange: (bar: number, slot: ChordSlot) => void
-  onMelodyChange: (bar: number, slot: number, note: MelodyNote | null) => void
+  onMelodyChange: (bar: number, masterSlot: number, note: MelodyNote | null) => void
   onAddBar?: () => void
 }
 
 interface ChordPickerTarget { bar: number; slot: ChordSlot }
-interface NotePickerTarget  { bar: number; slot: number; note: MelodyNote | null }
+interface NotePickerTarget  { bar: number; masterSlot: number; note: MelodyNote | null }
 
-function getGridDims(spb: number) {
-  if (spb <= 4) return { chordW: 96,  cellW: 22 }
-  if (spb <= 6) return { chordW: 106, cellW: 16 }
-  return              { chordW: 126,  cellW: 14 }  // 8 slots
+function getGridDims(displaySlots: number) {
+  if (displaySlots <= 4)  return { chordW: 96,  cellW: 22 }
+  if (displaySlots <= 6)  return { chordW: 106, cellW: 16 }
+  if (displaySlots <= 8)  return { chordW: 126, cellW: 14 }
+  if (displaySlots <= 12) return { chordW: 158, cellW: 12 }
+  return                         { chordW: 198, cellW: 11 }  // 16 cells
 }
 
 export default function SequencerGrid({ state, onChordChange, onMelodyChange, onAddBar }: Props) {
   const [chordPicker, setChordPicker] = useState<ChordPickerTarget | null>(null)
   const [notePicker,  setNotePicker]  = useState<NotePickerTarget | null>(null)
 
-  const { chords, melody, currentBar, keyRoot, pattern, timeSig } = state
-  const stepsPerBar = getStepsPerBar(pattern, timeSig)
-  const { chordW, cellW } = getGridDims(stepsPerBar)
+  const { chords, melody, currentBar, keyRoot, melodyRes, timeSig } = state
+  const displaySlots = getMelodyDisplaySlots(melodyRes, timeSig)
+  const { chordW, cellW } = getGridDims(displaySlots)
 
   function solfegeLabel(note: MelodyNote | null): string {
     if (!note) return ''
@@ -76,15 +78,16 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
                   )}
                 </button>
 
-                {/* Melody slots — stepsPerBar cells */}
+                {/* Melody cells */}
                 <div className="flex gap-0.5">
-                  {Array.from({ length: stepsPerBar }, (_, s) => {
-                    const note  = melody[bar]?.[s] ?? null
+                  {Array.from({ length: displaySlots }, (_, c) => {
+                    const masterSlot = cellToMasterSlot(c, melodyRes)
+                    const note  = melody[bar]?.[masterSlot] ?? null
                     const label = solfegeLabel(note)
                     return (
                       <button
-                        key={s}
-                        onClick={() => setNotePicker({ bar, slot: s, note })}
+                        key={c}
+                        onClick={() => setNotePicker({ bar, masterSlot, note })}
                         style={{ width: `${cellW}px` }}
                         className={`h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
                           note
@@ -104,7 +107,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           {/* Add bar button */}
           {onAddBar && (
             <div className="flex flex-col gap-1">
-              <div className="text-[10px] text-center text-transparent">{chords.length + 1}</div>
+              <div className="text-[10px] text-center text-transparent">·</div>
               <button
                 onClick={onAddBar}
                 style={{ width: `${chordW}px` }}
@@ -130,7 +133,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           keyRoot={keyRoot}
           selected={notePicker.note}
           onSelect={note => {
-            onMelodyChange(notePicker.bar, notePicker.slot, note)
+            onMelodyChange(notePicker.bar, notePicker.masterSlot, note)
             setNotePicker(null)
           }}
           onClose={() => setNotePicker(null)}

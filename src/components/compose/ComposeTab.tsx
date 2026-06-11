@@ -21,10 +21,10 @@ const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
 type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
-  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, addBar, removeLastBar, play, stop } = useSequencer()
+  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setMelodyRes, addBar, removeLastBar, play, stop } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
   const [panel, setPanel] = useState<Panel>(null)
-  const { isPlaying, bpm, pattern, keyRoot, timeSig } = state
+  const { isPlaying, bpm, pattern, keyRoot, timeSig, melodyRes } = state
 
   function applyComposition(src: AiComposition | SavedComposition) {
     stop()
@@ -32,6 +32,7 @@ export default function ComposeTab() {
     setPattern(src.pattern)
     setKeyRoot(src.keyRoot)
     if ('timeSig' in src && src.timeSig) setTimeSig(src.timeSig)
+    if ('melodyRes' in src && src.melodyRes) setMelodyRes(src.melodyRes)
     src.chords.forEach((slot, i) => setChordSlot(i, slot))
     src.melody.forEach((bar, i) => bar.forEach((note, j) => setMelodyNote(i, j, note)))
   }
@@ -81,6 +82,23 @@ export default function ComposeTab() {
               }`}
             >
               {ts}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {([4, 8, 16] as const).map(r => (
+            <button
+              key={r}
+              onClick={() => setMelodyRes(r)}
+              title={r === 4 ? '四分音符' : r === 8 ? '八分音符' : '十六分音符'}
+              className={`px-2 py-2 rounded-md text-xs font-medium ${
+                melodyRes === r
+                  ? 'bg-amber-500 text-zinc-950'
+                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
+              }`}
+            >
+              {r === 4 ? '♩' : r === 8 ? '♪' : '♬'}
             </button>
           ))}
         </div>

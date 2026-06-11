@@ -6,9 +6,9 @@ import type { ChordPosition } from '../types/chord'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import { useChordDb } from './useChordDb'
 
-const INITIAL_BARS = 8
-const MAX_BARS     = 32
-const MELODY_SLOTS = 8  // always store 8 eighth-note slots per bar
+const INITIAL_BARS  = 8
+const MAX_BARS      = 32
+const MASTER_SLOTS  = 16  // 十六分音符主网格，每小节始终存 16 个槽位
 
 type PatternStep = number | number[]
 const BASS       = -10
@@ -32,9 +32,7 @@ function getPatternSteps(pat: SequencerState['pattern']): PatternStep[] {
   return [STRUM_DOWN, STRUM_DOWN, STRUM_DOWN, STRUM_DOWN]
 }
 
-// Steps per bar: determined by pattern type AND time signature
-// 8-step patterns (folk): 4/4→8, 3/4→6, 6/8→6, 2/4→4
-// 4-step patterns (strum/classical): 4/4→4, 3/4→3, 6/8→3, 2/4→2
+// 节拍器步数（决定拨弦频率）
 export function getStepsPerBar(pat: SequencerState['pattern'], timeSig: TimeSig): number {
   const is8step = pat === '53231323' || pat === 'x3231323'
   if (timeSig === '4/4') return is8step ? 8 : 4
@@ -42,9 +40,26 @@ export function getStepsPerBar(pat: SequencerState['pattern'], timeSig: TimeSig)
   return is8step ? 4 : 2  // 2/4
 }
 
-// Step duration: stepsPerBar >= 5 → eighth note, else quarter note
-function getSPerStep(stepsPerBar: number, bpm: number): number {
-  return stepsPerBar >= 5 ? 60 / bpm / 2 : 60 / bpm
+// 主网格槽数（十六分音符数）
+export function getMasterSlotsPerBar(timeSig: TimeSig): number {
+  if (timeSig === '4/4') return 16
+  if (timeSig === '3/4' || timeSig === '6/8') return 12
+  return 8  // 2/4
+}
+
+// 主步长始终是十六分音符时长
+function getMasterSPerStep(bpm: number): number {
+  return 60 / bpm / 4
+}
+
+// 当前旋律精度下显示的格子数
+export function getMelodyDisplaySlots(melodyRes: SequencerState['melodyRes'], timeSig: TimeSig): number {
+  return Math.round(getMasterSlotsPerBar(timeSig) / (MASTER_SLOTS / melodyRes))
+}
+
+// 显示格子 c → 主网格槽位
+export function cellToMasterSlot(cell: number, melodyRes: SequencerState['melodyRes']): number {
+  return cell * (MASTER_SLOTS / melodyRes)
 }
 
 function getBassString(pos: ChordPosition): number {
@@ -73,7 +88,7 @@ function makeEmptyChords(n = INITIAL_BARS): ChordSlot[] {
 }
 
 function makeEmptyMelody(n = INITIAL_BARS): (MelodyNote | null)[][] {
-  return Array.from({ length: n }, () => Array(MELODY_SLOTS).fill(null))
+  return Array.from({ length: n }, () => Array(MASTER_SLOTS).fill(null))
 }
 
 export function useSequencer() {
@@ -82,6 +97,7 @@ export function useSequencer() {
     pattern: '53231323',
     keyRoot: 0,
     timeSig: '4/4',
+    melodyRes: 8,
     chords: makeEmptyChords(),
     melody: makeEmptyMelody(),
     isPlaying: false,
@@ -90,20 +106,20 @@ export function useSequencer() {
 
   const { getChordEntry } = useChordDb()
 
-  const intervalRef  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const nextTimeRef  = useRef(0)
-  const stepRef      = useRef(0)
-  const genRef       = useRef(0)
-  const posRef       = useRef<ChordPosition | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const nextTimeRef = useRef(0)
+  const stepRef     = useRef(0)
+  const genRef      = useRef(0)
+  const posRef      = useRef<ChordPosition | null>(null)
 
-  const chordsRef   = useRef(state.chords)
-  const melodyRef   = useRef(state.melody)
-  const patternRef  = useRef(state.pattern)
-  const bpmRef      = useRef(state.bpm)
-  const timeSigRef  = useRef(state.timeSig)
+  const chordsRef    = useRef(state.chords)
+  const melodyRef    = useRef(state.melody)
+  const patternRef   = useRef(state.pattern)
+  const bpmRef       = useRef(state.bpm)
+  const timeSigRef   = useRef(state.timeSig)
 
-  useEffect(() => { chordsRef.current  = state.chords  }, [state.chords])
-  useEffect(() => { melodyRef.current  = state.melody  }, [state.melody])
+  useEffect(() => { chordsRef.current = state.chords }, [state.chords])
+  useEffect(() => { melodyRef.current = state.melody }, [state.melody])
 
   const scheduleStep = useCallback((step: PatternStep, time: number, isBass: boolean, pos: ChordPosition) => {
     if (step === REST) return
@@ -140,23 +156,26 @@ export function useSequencer() {
   }, [])
 
   const schedulerTick = useCallback(() => {
-    const ctx      = audioEngine.getContext()
-    const gen      = genRef.current
-    const pat      = patternRef.current
-    const bpm      = bpmRef.current
-    const timeSig  = timeSigRef.current
-    const steps    = getPatternSteps(pat)
-    const spb      = getStepsPerBar(pat, timeSig)
-    const sPerStep = getSPerStep(spb, bpm)
-    const numBars  = chordsRef.current.length
-    const total    = numBars * spb
+    const ctx        = audioEngine.getContext()
+    const gen        = genRef.current
+    const pat        = patternRef.current
+    const bpm        = bpmRef.current
+    const timeSig    = timeSigRef.current
+    const steps      = getPatternSteps(pat)
+    const spb        = getStepsPerBar(pat, timeSig)     // 拨弦步数/节
+    const master     = getMasterSlotsPerBar(timeSig)    // 十六分槽数/节
+    const sPerMaster = getMasterSPerStep(bpm)           // 始终是十六分音符时长
+    const arpEvery   = master / spb                     // 每隔几个主步触发一次拨弦
+    const numBars    = chordsRef.current.length
+    const total      = numBars * master
 
     while (nextTimeRef.current < ctx.currentTime + 0.1) {
-      const globalStep = stepRef.current % total
-      const bar        = Math.floor(globalStep / spb)
-      const stepInBar  = globalStep % spb
+      const globalStep  = stepRef.current % total
+      const bar         = Math.floor(globalStep / master)
+      const masterInBar = globalStep % master
 
-      if (stepInBar === 0) {
+      // 小节切换
+      if (masterInBar === 0) {
         const slot = chordsRef.current[bar]
         posRef.current = (slot.root && slot.suffix)
           ? (getChordEntry(slot.root, slot.suffix)?.positions[slot.positionIndex] ?? null)
@@ -169,18 +188,19 @@ export function useSequencer() {
         }, ms)
       }
 
-      if (posRef.current) {
-        // stepInBar % steps.length: handles spb < pattern.length gracefully
-        scheduleStep(steps[stepInBar % steps.length], nextTimeRef.current, stepInBar === 0, posRef.current)
+      // 拨弦：每 arpEvery 个主步触发一次
+      if (masterInBar % arpEvery === 0 && posRef.current) {
+        const arpStep = Math.round(masterInBar / arpEvery)
+        scheduleStep(steps[arpStep % steps.length], nextTimeRef.current, arpStep === 0, posRef.current)
       }
 
-      // Melody fires at every arpeggio step — stepInBar maps directly to melody slot
-      const note = melodyRef.current[bar]?.[stepInBar]
+      // 旋律：直接读取对应主槽位的音符
+      const note = melodyRef.current[bar]?.[masterInBar]
       if (note) {
         pluckStringAt(semitoneToFreq(note.semitone), nextTimeRef.current + 0.005, 0.85)
       }
 
-      nextTimeRef.current += sPerStep
+      nextTimeRef.current += sPerMaster
       stepRef.current++
     }
   }, [scheduleStep, getChordEntry])
@@ -220,10 +240,10 @@ export function useSequencer() {
     })
   }, [])
 
-  const setMelodyNote = useCallback((bar: number, slot: number, note: MelodyNote | null) => {
+  const setMelodyNote = useCallback((bar: number, masterSlot: number, note: MelodyNote | null) => {
     setState(s => {
       const melody = s.melody.map((row, i) =>
-        i === bar ? row.map((n, j) => j === slot ? note : n) : row
+        i === bar ? row.map((n, j) => j === masterSlot ? note : n) : row
       )
       melodyRef.current = melody
       return { ...s, melody }
@@ -249,11 +269,15 @@ export function useSequencer() {
     setState(s => ({ ...s, timeSig }))
   }, [])
 
+  const setMelodyRes = useCallback((melodyRes: SequencerState['melodyRes']) => {
+    setState(s => ({ ...s, melodyRes }))
+  }, [])
+
   const addBar = useCallback(() => {
     setState(s => {
       if (s.chords.length >= MAX_BARS) return s
       const chords = [...s.chords, { root: null, suffix: null, positionIndex: 0 }]
-      const melody = [...s.melody, Array(MELODY_SLOTS).fill(null)]
+      const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
       chordsRef.current = chords
       melodyRef.current = melody
       return { ...s, chords, melody }
@@ -273,5 +297,9 @@ export function useSequencer() {
 
   useEffect(() => () => stop(), [stop])
 
-  return { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, addBar, removeLastBar, play, stop }
+  return {
+    state,
+    setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
+    setTimeSig, setMelodyRes, addBar, removeLastBar, play, stop,
+  }
 }

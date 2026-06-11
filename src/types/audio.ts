@@ -52,8 +52,9 @@ export interface SequencerState {
   pattern: Exclude<ArpeggioPattern, 'custom'>
   keyRoot: number           // 0-11，用于显示 solfège 标注
   timeSig: TimeSig          // 拍号
-  chords: ChordSlot[]       // length = 8
-  melody: (MelodyNote | null)[][]  // [bar][slot=0..7]，8个八分音符槽
+  melodyRes: 4 | 8 | 16    // 旋律精度（四分/八分/十六分音符）
+  chords: ChordSlot[]       // length = numBars
+  melody: (MelodyNote | null)[][]  // [bar][masterSlot=0..15]，十六分音符主网格
   isPlaying: boolean
   currentBar: number        // -1 = 未播放
 }

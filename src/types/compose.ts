@@ -15,6 +15,7 @@ export interface SavedComposition {
   pattern: '53231323' | 'x3231323' | '3_12_3' | 'strum'
   keyRoot: number
   timeSig?: TimeSig
+  melodyRes?: 4 | 8 | 16
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
 }
