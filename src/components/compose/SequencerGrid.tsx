@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../../types/audio'
+import type { ChordSlot, MelodyNote, SequencerState } from '../../types/audio'
 import { getMasterSlotsPerBar } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
 import NotePicker from './NotePicker'
@@ -15,13 +15,7 @@ interface Props {
 interface ChordPickerTarget { bar: number; slot: ChordSlot }
 interface NotePickerTarget  { bar: number; masterSlot: number; note: MelodyNote | null }
 
-const GAP = 2  // px between cells
-
-// Fixed chord/melody row width based on time signature (anchored to 8th-note density)
-function getBarWidth(timeSig: TimeSig): number {
-  const n8th = getMasterSlotsPerBar(timeSig) / 2  // number of 8th notes per bar
-  return n8th * 16 - GAP  // 14px per 8th note + 2px gap, minus trailing gap
-}
+const GAP = 2  // px between melody cells
 
 interface CellEntry {
   masterSlot: number
@@ -65,7 +59,6 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
 
   const { chords, melody, currentBar, keyRoot, noteDuration, timeSig } = state
   const masterSlotsPerBar = getMasterSlotsPerBar(timeSig)
-  const barW = getBarWidth(timeSig)
 
   function solfegeLabel(note: MelodyNote | null): string {
     if (!note) return ''
@@ -75,86 +68,79 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
 
   return (
     <>
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-2 px-4 min-w-max">
-          {chords.map((slot, bar) => {
-            const isActive = currentBar === bar
-            const hasChord = slot.root !== null
-            const cells = renderBarCells(melody[bar] ?? [], noteDuration, masterSlotsPerBar)
+      <div className="grid grid-cols-4 gap-x-2 gap-y-4 px-4">
+        {chords.map((slot, bar) => {
+          const isActive = currentBar === bar
+          const hasChord = slot.root !== null
+          const cells = renderBarCells(melody[bar] ?? [], noteDuration, masterSlotsPerBar)
 
-            return (
-              <div key={bar} className="flex flex-col gap-1">
-                {/* Bar number */}
-                <div className={`text-[10px] text-center ${isActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
-                  {bar + 1}
-                </div>
-
-                {/* Chord cell */}
-                <button
-                  onClick={() => setChordPicker({ bar, slot })}
-                  style={{ width: `${barW}px` }}
-                  className={`h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
-                    isActive
-                      ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
-                      : hasChord
-                        ? 'border-zinc-600 bg-zinc-800 hover:border-zinc-500'
-                        : 'border-zinc-700 border-dashed bg-zinc-900 hover:border-zinc-600'
-                  }`}
-                >
-                  {hasChord ? (
-                    <>
-                      <span className={isActive ? 'text-amber-400' : 'text-zinc-100'}>{slot.root}</span>
-                      <span className="text-[10px] text-zinc-500 mt-0.5">
-                        {slot.suffix !== 'major' ? slot.suffix : '大调'}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-zinc-500 text-xs">+</span>
-                  )}
-                </button>
-
-                {/* Melody row — flex-grow proportional to duration */}
-                <div
-                  className="flex"
-                  style={{ width: `${barW}px`, gap: `${GAP}px` }}
-                >
-                  {cells.map((cell, idx) => {
-                    const { masterSlot, note, flex } = cell
-                    const label = solfegeLabel(note)
-                    return (
-                      <button
-                        key={idx}
-                        style={{ flex, minWidth: 0 }}
-                        onClick={() => setNotePicker({ bar, masterSlot, note })}
-                        className={`h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center overflow-hidden ${
-                          note
-                            ? 'bg-amber-500/80 text-zinc-950'
-                            : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
-                        }`}
-                      >
-                        {label || '·'}
-                      </button>
-                    )
-                  })}
-                </div>
+          return (
+            <div key={bar} className="flex flex-col gap-1 min-w-0">
+              {/* Bar number */}
+              <div className={`text-[10px] text-center ${isActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
+                {bar + 1}
               </div>
-            )
-          })}
 
-          {/* Add bar */}
-          {onAddBar && (
-            <div className="flex flex-col gap-1">
-              <div className="text-[10px] text-center text-transparent">·</div>
+              {/* Chord cell */}
               <button
-                onClick={onAddBar}
-                style={{ width: `${barW}px` }}
-                className="h-[52px] rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xl font-light transition-all flex items-center justify-center"
+                onClick={() => setChordPicker({ bar, slot })}
+                className={`w-full h-14 rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
+                  isActive
+                    ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
+                    : hasChord
+                      ? 'border-zinc-600 bg-zinc-800 hover:border-zinc-500'
+                      : 'border-zinc-700 border-dashed bg-zinc-900 hover:border-zinc-600'
+                }`}
               >
-                +
+                {hasChord ? (
+                  <>
+                    <span className={isActive ? 'text-amber-400' : 'text-zinc-100'}>{slot.root}</span>
+                    <span className="text-[10px] text-zinc-500 mt-0.5">
+                      {slot.suffix !== 'major' ? slot.suffix : '大调'}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-zinc-500 text-xs">+</span>
+                )}
               </button>
+
+              {/* Melody row — flex-grow proportional to duration */}
+              <div className="flex w-full" style={{ gap: `${GAP}px` }}>
+                {cells.map((cell, idx) => {
+                  const { masterSlot, note, flex } = cell
+                  const label = solfegeLabel(note)
+                  return (
+                    <button
+                      key={idx}
+                      style={{ flex, minWidth: 0 }}
+                      onClick={() => setNotePicker({ bar, masterSlot, note })}
+                      className={`h-10 rounded text-[9px] font-bold transition-colors flex items-center justify-center overflow-hidden ${
+                        note
+                          ? 'bg-amber-500/80 text-zinc-950'
+                          : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
+                      }`}
+                    >
+                      {label || '·'}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          )}
-        </div>
+          )
+        })}
+
+        {/* Add bar */}
+        {onAddBar && (
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="text-[10px] text-center text-transparent">·</div>
+            <button
+              onClick={onAddBar}
+              className="w-full h-14 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xl font-light transition-all flex items-center justify-center"
+            >
+              +
+            </button>
+          </div>
+        )}
       </div>
 
       {chordPicker && (
