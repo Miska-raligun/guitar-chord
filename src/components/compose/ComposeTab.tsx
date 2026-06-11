@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useSequencer } from '../../hooks/useSequencer'
 import { useSavedCompositions } from '../../hooks/useSavedCompositions'
+import { useAiCompose } from '../../hooks/useAiCompose'
+import { loadApiConfig } from './ApiConfigModal'
 import SequencerGrid from './SequencerGrid'
 import AiPanel from './AiPanel'
 import SaveNameModal from './SaveNameModal'
@@ -23,8 +25,18 @@ type Panel = 'ai' | 'save' | 'library' | null
 export default function ComposeTab() {
   const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, play, stop } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
-  const [panel, setPanel] = useState<Panel>(null)
+  const { generate, isLoading: aiLoading, error: aiError, clearError: clearAiError } = useAiCompose()
+  const [panel, setPanel]       = useState<Panel>(null)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiResult, setAiResult] = useState<AiComposition | null>(null)
   const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
+
+  async function handleAiGenerate() {
+    if (!aiPrompt.trim() || aiLoading) return
+    const config = loadApiConfig()
+    const r = await generate(aiPrompt, config)
+    if (r) setAiResult(r)
+  }
 
   function applyComposition(src: AiComposition | SavedComposition) {
     clearAll()
@@ -126,10 +138,16 @@ export default function ComposeTab() {
       <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
         <button
           onClick={() => setPanel('ai')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-400 text-xs font-medium hover:text-zinc-200 hover:bg-zinc-700"
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md text-xs font-medium ${
+            aiLoading
+              ? 'bg-amber-500/15 text-amber-400 animate-pulse'
+              : aiResult
+              ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
+              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+          }`}
         >
-          <IconWand className="w-3.5 h-3.5" />
-          AI 创作
+          <IconWand className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
+          {aiLoading ? '生成中...' : aiResult ? 'AI 结果' : 'AI 创作'}
         </button>
         <button
           onClick={() => setPanel('save')}
@@ -203,8 +221,16 @@ export default function ComposeTab() {
 
       {panel === 'ai' && (
         <AiPanel
-          onGenerate={result => { applyComposition(result); setPanel(null) }}
+          onGenerate={result => { applyComposition(result); setAiResult(null); setPanel(null) }}
           onClose={() => setPanel(null)}
+          prompt={aiPrompt}
+          onPromptChange={setAiPrompt}
+          result={aiResult}
+          onResultClear={() => setAiResult(null)}
+          isLoading={aiLoading}
+          error={aiError}
+          onClearError={clearAiError}
+          onTriggerGenerate={handleAiGenerate}
         />
       )}
       {panel === 'save' && (

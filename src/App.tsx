@@ -14,10 +14,11 @@ export default function App() {
       <Header />
       <TabBar active={tab} onChange={setTab} />
       <main className="flex-1 overflow-y-auto">
-        {tab === 'recognize' ? <RecognizeTab />
-          : tab === 'browse' ? <BrowseTab />
-          : tab === 'fretboard' ? <FretboardTab />
-          : <ComposeTab />}
+        <div className={tab === 'recognize' ? '' : 'hidden'}><RecognizeTab /></div>
+        <div className={tab === 'browse'    ? '' : 'hidden'}><BrowseTab /></div>
+        <div className={tab === 'fretboard' ? '' : 'hidden'}><FretboardTab /></div>
+        {/* ComposeTab uses h-full for sticky bottom bar — keep wrapper h-full when visible */}
+        <div className={tab === 'compose' ? 'h-full' : 'hidden'}><ComposeTab /></div>
       </main>
     </div>
   )
