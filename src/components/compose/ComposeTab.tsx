@@ -1,7 +1,14 @@
+import { useState } from 'react'
 import { useSequencer } from '../../hooks/useSequencer'
+import { useSavedCompositions } from '../../hooks/useSavedCompositions'
 import SequencerGrid from './SequencerGrid'
-import { ROOTS } from '../../utils/dbUtils'
+import AiPanel from './AiPanel'
+import SaveNameModal from './SaveNameModal'
+import SavedList from './SavedList'
+import type { AiComposition } from '../../hooks/useAiCompose'
+import type { SavedComposition } from '../../types/compose'
 import type { SequencerState } from '../../types/audio'
+import { ROOTS } from '../../utils/dbUtils'
 
 const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
   { id: '53231323', label: '民谣' },
@@ -10,15 +17,39 @@ const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
   { id: 'strum',    label: '扫弦' },
 ]
 
+type Panel = 'ai' | 'save' | 'library' | null
+
 export default function ComposeTab() {
   const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, play, stop } = useSequencer()
+  const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
+  const [panel, setPanel] = useState<Panel>(null)
   const { isPlaying, bpm, pattern, keyRoot } = state
+
+  function applyComposition(src: AiComposition | SavedComposition) {
+    stop()
+    setBpm(src.bpm)
+    setPattern(src.pattern)
+    setKeyRoot(src.keyRoot)
+    src.chords.forEach((slot, i)   => setChordSlot(i, slot))
+    src.melody.forEach((bar, i)    => bar.forEach((note, j) => setMelodyNote(i, j, note)))
+  }
+
+  function handleAiResult(result: AiComposition) {
+    applyComposition(result)
+  }
+
+  function handleLoad(item: SavedComposition) {
+    applyComposition(item)
+  }
+
+  function handleSave(name: string) {
+    saveComposition(name, state)
+  }
 
   return (
     <div className="flex flex-col h-full">
       {/* Control bar */}
       <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex-wrap">
-        {/* Key root selector */}
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-zinc-500 uppercase">调</span>
           <select
@@ -32,7 +63,6 @@ export default function ComposeTab() {
           </select>
         </div>
 
-        {/* Pattern selector */}
         <div className="flex items-center gap-1">
           {PATTERNS.map(p => (
             <button
@@ -49,7 +79,6 @@ export default function ComposeTab() {
           ))}
         </div>
 
-        {/* BPM */}
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-[10px] text-zinc-500">BPM</span>
           <input
@@ -63,6 +92,28 @@ export default function ComposeTab() {
         </div>
       </div>
 
+      {/* Action row */}
+      <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+        <button
+          onClick={() => setPanel('ai')}
+          className="flex-1 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 transition-colors"
+        >
+          🤖 AI 创作
+        </button>
+        <button
+          onClick={() => setPanel('save')}
+          className="flex-1 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 transition-colors"
+        >
+          💾 保存
+        </button>
+        <button
+          onClick={() => setPanel('library')}
+          className="flex-1 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-medium hover:bg-zinc-700 transition-colors"
+        >
+          📁 曲库{savedList.length > 0 && <span className="ml-1 text-amber-400">({savedList.length})</span>}
+        </button>
+      </div>
+
       {/* Sequencer grid */}
       <div className="flex-1 overflow-y-auto py-4">
         <SequencerGrid
@@ -71,10 +122,9 @@ export default function ComposeTab() {
           onMelodyChange={setMelodyNote}
         />
 
-        {/* Hint */}
         {state.chords.every(c => c.root === null) && (
           <p className="text-center text-zinc-600 text-xs mt-6 px-8">
-            点击格子选择和弦，点击下方小格添加旋律音
+            点击格子选择和弦，点击下方小格添加旋律音，或用 AI 一键生成
           </p>
         )}
       </div>
@@ -97,6 +147,28 @@ export default function ComposeTab() {
           </button>
         )}
       </div>
+
+      {/* Panels */}
+      {panel === 'ai' && (
+        <AiPanel
+          onGenerate={handleAiResult}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === 'save' && (
+        <SaveNameModal
+          onSave={handleSave}
+          onClose={() => setPanel(null)}
+        />
+      )}
+      {panel === 'library' && (
+        <SavedList
+          list={savedList}
+          onLoad={handleLoad}
+          onDelete={removeComposition}
+          onClose={() => setPanel(null)}
+        />
+      )}
     </div>
   )
 }
