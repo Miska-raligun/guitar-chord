@@ -9,7 +9,7 @@ interface Props {
 export default function LiveChordDisplay({ match }: Props) {
   if (!match) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
+      <div className="flex flex-col items-center justify-center h-48 text-stone-400">
         <div className="text-4xl mb-2">🎸</div>
         <div className="text-sm">弹奏吉他和弦以识别...</div>
       </div>
@@ -22,7 +22,7 @@ export default function LiveChordDisplay({ match }: Props) {
       {match.position ? (
         <ChordDiagram position={match.position} />
       ) : (
-        <div className="text-zinc-500 text-sm">无指法图数据</div>
+        <div className="text-stone-400 text-sm">无指法图数据</div>
       )}
     </div>
   )

@@ -12,10 +12,10 @@ export default function RootSelector({ selected, onChange }: Props) {
         <button
           key={root}
           onClick={() => onChange(root)}
-          className={`py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`py-2 rounded-xl text-sm font-medium transition-colors ${
             selected === root
-              ? 'bg-amber-500 text-zinc-950'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              ? 'bg-amber-500 text-stone-50'
+              : 'bg-amber-100 text-stone-600 hover:bg-amber-200 hover:text-stone-800'
           }`}
         >
           {root}

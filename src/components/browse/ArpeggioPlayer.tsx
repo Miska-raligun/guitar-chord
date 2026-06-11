@@ -26,54 +26,52 @@ export default function ArpeggioPlayer({
 
   return (
     <div className="w-full space-y-3">
-      <div className="text-xs text-zinc-400 uppercase tracking-wider">伴奏节奏型</div>
+      <div className="text-xs text-stone-400 uppercase tracking-wider">伴奏节奏型</div>
 
-      {/* 2列×3行，最后一个占满一行 */}
       <div className="grid grid-cols-2 gap-2">
         {PATTERNS.slice(0, 4).map(({ id, title, sub }) => (
           <button
             key={id}
             onClick={() => onPatternChange(id)}
-            className={`flex flex-col items-center py-2.5 px-2 rounded-lg text-xs font-medium transition-colors leading-tight ${
+            className={`flex flex-col items-center py-2.5 px-2 rounded-xl text-xs font-medium transition-colors leading-tight ${
               pattern === id
-                ? 'bg-amber-500 text-zinc-950'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                ? 'bg-amber-500 text-stone-50'
+                : 'bg-amber-100 text-stone-600 hover:bg-amber-200 hover:text-stone-800'
             }`}
           >
             <span className="font-mono font-bold text-[11px]">{title}</span>
-            <span className={`mt-0.5 text-[10px] ${pattern === id ? 'text-zinc-800' : 'text-zinc-500'}`}>{sub}</span>
+            <span className={`mt-0.5 text-[10px] ${pattern === id ? 'text-amber-100' : 'text-stone-400'}`}>{sub}</span>
           </button>
         ))}
       </div>
 
-      {/* 自定义节奏型独占一行 */}
       <button
         onClick={() => onPatternChange('custom')}
-        className={`w-full py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
+        className={`w-full py-2.5 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
           pattern === 'custom'
-            ? 'bg-amber-500 text-zinc-950'
-            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-dashed border-zinc-700'
+            ? 'bg-amber-500 text-stone-50'
+            : 'bg-amber-100 text-stone-600 hover:bg-amber-200 hover:text-stone-800 border border-dashed border-amber-300'
         }`}
       >
         <span>自定义节奏型</span>
       </button>
 
       <div className="flex items-center gap-3">
-        <span className="text-xs text-zinc-400 w-12">速度</span>
+        <span className="text-xs text-stone-400 w-12">速度</span>
         <input
           type="range" min={40} max={200} step={5} value={bpm}
           onChange={e => onBpmChange(Number(e.target.value))}
           className="flex-1 accent-amber-500"
         />
-        <span className="text-xs text-zinc-400 w-14">{bpm} BPM</span>
+        <span className="text-xs text-stone-500 w-14">{bpm} BPM</span>
       </div>
 
       <button
         onClick={() => isPlaying ? onStop() : onPlay(position, pattern, bpm)}
         className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
           isPlaying
-            ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
-            : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
+            ? 'bg-amber-100 text-stone-600 border border-amber-200 hover:bg-amber-200'
+            : 'bg-amber-500 text-stone-50 hover:bg-amber-600'
         }`}
       >
         {isPlaying

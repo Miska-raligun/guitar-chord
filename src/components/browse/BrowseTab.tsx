@@ -36,7 +36,6 @@ export default function BrowseTab() {
     stop()
   }, [selectedRoot, selectedSuffix, stop])
 
-  // 播放中实时更新自定义节奏型
   useEffect(() => {
     if (arpeggioState.isPlaying && localPattern === 'custom') {
       updateCustomPattern(customConfig, localBpm)
@@ -69,12 +68,12 @@ export default function BrowseTab() {
   return (
     <div className="flex flex-col gap-5 px-4 py-5">
       <div>
-        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">根音</div>
+        <div className="text-xs text-stone-400 uppercase tracking-wider mb-2">根音</div>
         <RootSelector selected={selectedRoot} onChange={setSelectedRoot} />
       </div>
 
       <div>
-        <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">和弦类型</div>
+        <div className="text-xs text-stone-400 uppercase tracking-wider mb-2">和弦类型</div>
         <SuffixSelector suffixes={suffixes} selected={selectedSuffix} onChange={setSelectedSuffix} />
       </div>
 
@@ -94,7 +93,7 @@ export default function BrowseTab() {
             />
           </div>
 
-          <div className="bg-zinc-800/50 rounded-xl p-4 space-y-4">
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 space-y-4 border border-amber-100 shadow-sm shadow-amber-100">
             <ArpeggioPlayer
               position={currentPosition}
               arpeggioState={{ ...arpeggioState, bpm: localBpm, pattern: localPattern }}
@@ -104,9 +103,8 @@ export default function BrowseTab() {
               onBpmChange={handleBpmChange}
             />
 
-            {/* 自定义编辑器：仅在选中 custom 时展开 */}
             {localPattern === 'custom' && (
-              <div className="border-t border-zinc-700 pt-4">
+              <div className="border-t border-amber-100 pt-4">
                 <CustomPatternEditor
                   steps={customSteps}
                   timeSig={customTimeSig}
@@ -118,7 +116,7 @@ export default function BrowseTab() {
           </div>
         </>
       ) : (
-        <div className="text-center text-zinc-600 py-8 text-sm">
+        <div className="text-center text-stone-400 py-8 text-sm">
           该和弦暂无指法数据
         </div>
       )}

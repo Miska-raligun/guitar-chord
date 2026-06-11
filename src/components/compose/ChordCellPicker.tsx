@@ -16,7 +16,7 @@ export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
   const [suffix, setSuffix] = useState(slot.suffix ?? 'major')
 
   function commit(r: string, s: string) {
-    const entry = getChordEntry(r, s)
+    getChordEntry(r, s)
     onSelect({ root: r, suffix: s, positionIndex: 0 })
   }
 
@@ -33,14 +33,14 @@ export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-2xl p-4 pb-8"
+        className="w-full bg-white border-t border-amber-200 rounded-t-2xl p-4 pb-8 shadow-xl shadow-amber-200/30"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-zinc-400 uppercase tracking-wider">
+          <span className="text-xs text-stone-400 uppercase tracking-wider">
             选择和弦
             {root && suffix && (
-              <span className="ml-2 text-amber-400 normal-case font-semibold">
+              <span className="ml-2 text-amber-600 normal-case font-semibold">
                 {root} {suffix !== 'major' ? suffix : ''}
               </span>
             )}
@@ -48,11 +48,11 @@ export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => { onSelect({ root: null, suffix: null, positionIndex: 0 }); onClose() }}
-              className="py-2 px-3 rounded-lg text-zinc-400 text-sm hover:text-zinc-200 hover:bg-zinc-800"
+              className="py-2 px-3 rounded-lg text-stone-400 text-sm hover:text-stone-600 hover:bg-amber-100"
             >
               清空
             </button>
-            <button onClick={onClose} className="py-2 px-3 rounded-lg text-zinc-400 text-sm hover:text-zinc-200 hover:bg-zinc-800">确定</button>
+            <button onClick={onClose} className="py-2 px-3 rounded-lg text-stone-400 text-sm hover:text-stone-600 hover:bg-amber-100">确定</button>
           </div>
         </div>
 

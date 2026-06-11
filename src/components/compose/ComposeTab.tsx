@@ -40,13 +40,13 @@ export default function ComposeTab() {
   return (
     <div className="flex flex-col h-full">
       {/* Control bar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border-b border-zinc-800 flex-wrap">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white/70 backdrop-blur-sm border-b border-amber-200/50 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">调</span>
+          <span className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">调</span>
           <select
             value={keyRoot}
             onChange={e => setKeyRoot(Number(e.target.value))}
-            className="bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none focus:border-amber-500/60"
+            className="bg-white text-stone-700 text-xs rounded-md px-2 py-1.5 border border-amber-200 outline-none focus:border-amber-400"
           >
             {ROOTS.map((r, i) => (
               <option key={r} value={i}>{r}</option>
@@ -61,8 +61,8 @@ export default function ComposeTab() {
               onClick={() => setPattern(p.id)}
               className={`px-2.5 py-2 rounded-md text-xs font-medium ${
                 pattern === p.id
-                  ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
+                  ? 'bg-amber-500 text-stone-50'
+                  : 'bg-amber-100 text-stone-600 hover:text-stone-800 hover:bg-amber-200'
               }`}
             >
               {p.label}
@@ -77,8 +77,8 @@ export default function ComposeTab() {
               onClick={() => setTimeSig(ts)}
               className={`px-2 py-2 rounded-md text-xs font-mono font-medium ${
                 timeSig === ts
-                  ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
+                  ? 'bg-amber-500 text-stone-50'
+                  : 'bg-amber-100 text-stone-600 hover:text-stone-800 hover:bg-amber-200'
               }`}
             >
               {ts}
@@ -100,8 +100,8 @@ export default function ComposeTab() {
               title={title}
               className={`px-2 py-2 rounded-md text-xs font-medium ${
                 noteDuration === d
-                  ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
+                  ? 'bg-amber-500 text-stone-50'
+                  : 'bg-amber-100 text-stone-600 hover:text-stone-800 hover:bg-amber-200'
               }`}
             >
               {label}
@@ -110,42 +110,42 @@ export default function ComposeTab() {
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">BPM</span>
+          <span className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">BPM</span>
           <input
             type="number"
             min={40}
             max={200}
             value={bpm}
             onChange={e => setBpm(Math.max(40, Math.min(200, Number(e.target.value))))}
-            className="w-14 bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none text-center focus:border-amber-500/60"
+            className="w-14 bg-white text-stone-700 text-xs rounded-md px-2 py-1.5 border border-amber-200 outline-none text-center focus:border-amber-400"
           />
         </div>
       </div>
 
       {/* Action row */}
-      <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800/60">
+      <div className="flex gap-2 px-4 py-2 bg-white/60 backdrop-blur-sm border-b border-amber-200/40">
         <button
           onClick={() => setPanel('ai')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-amber-100 text-stone-600 text-xs font-medium hover:text-stone-800 hover:bg-amber-200"
         >
           <IconWand className="w-3.5 h-3.5" />
           AI 创作
         </button>
         <button
           onClick={() => setPanel('save')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-amber-100 text-stone-600 text-xs font-medium hover:text-stone-800 hover:bg-amber-200"
         >
           <IconSave className="w-3.5 h-3.5" />
           保存
         </button>
         <button
           onClick={() => setPanel('library')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-amber-100 text-stone-600 text-xs font-medium hover:text-stone-800 hover:bg-amber-200"
         >
           <IconLibrary className="w-3.5 h-3.5" />
           曲库
           {savedList.length > 0 && (
-            <span className="ml-0.5 text-amber-400/80">({savedList.length})</span>
+            <span className="ml-0.5 text-amber-600">({savedList.length})</span>
           )}
         </button>
       </div>
@@ -160,7 +160,7 @@ export default function ComposeTab() {
         />
 
         {state.chords.every(c => c.root === null) && (
-          <p className="text-center text-zinc-600 text-xs mt-8 px-8 leading-relaxed">
+          <p className="text-center text-stone-400 text-xs mt-8 px-8 leading-relaxed">
             点击格子选择和弦<br />
             点击下方小格添加旋律音<br />
             或使用 AI 创作功能一键生成
@@ -169,13 +169,13 @@ export default function ComposeTab() {
       </div>
 
       {/* Play / Stop */}
-      <div className="flex gap-2 px-4 py-3.5 bg-zinc-900 border-t border-zinc-800">
+      <div className="flex gap-2 px-4 py-3.5 bg-white/70 backdrop-blur-sm border-t border-amber-200/50">
         <button
           onClick={isPlaying ? stop : play}
           className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
             isPlaying
-              ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
-              : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
+              ? 'bg-amber-100 text-stone-600 border border-amber-200 hover:bg-amber-200'
+              : 'bg-amber-500 text-stone-50 hover:bg-amber-600'
           }`}
         >
           {isPlaying
@@ -186,7 +186,7 @@ export default function ComposeTab() {
         {state.chords.length > 1 && (
           <button
             onClick={removeLastBar}
-            className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-400 text-xs hover:bg-zinc-700 hover:text-zinc-200 border border-zinc-700"
+            className="px-3 py-3 rounded-xl bg-amber-100 text-stone-500 text-xs hover:bg-amber-200 hover:text-stone-700 border border-amber-200"
             title="删除最后一节"
           >
             −节

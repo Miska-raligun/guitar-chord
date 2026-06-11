@@ -26,39 +26,39 @@ export default function SavedList({ list, onLoad, onDelete, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full bg-zinc-900 border-t border-zinc-700/60 rounded-t-2xl pb-8 shadow-xl"
+        className="w-full bg-white border-t border-amber-200 rounded-t-2xl pb-8 shadow-xl shadow-amber-200/30"
         style={{ maxHeight: '70vh' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-100">
           <div className="flex items-center gap-2">
-            <IconLibrary className="w-4 h-4 text-zinc-400" />
-            <span className="text-sm font-semibold text-zinc-200">曲库</span>
+            <IconLibrary className="w-4 h-4 text-stone-400" />
+            <span className="text-sm font-semibold text-stone-800">曲库</span>
           </div>
-          <button onClick={onClose} className="text-zinc-500 text-xs hover:text-zinc-300">关闭</button>
+          <button onClick={onClose} className="text-stone-400 text-xs hover:text-stone-600">关闭</button>
         </div>
 
         {list.length === 0 ? (
-          <p className="text-center text-zinc-600 text-sm py-12">暂无保存的编曲</p>
+          <p className="text-center text-stone-400 text-sm py-12">暂无保存的编曲</p>
         ) : (
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(70vh - 52px)' }}>
             {list.map(item => (
               <div
                 key={item.id}
-                className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                className="flex items-center gap-3 px-4 py-3.5 border-b border-amber-100/80 hover:bg-amber-50"
               >
                 <button
                   className="flex-1 text-left min-w-0"
                   onClick={() => onLoad(item)}
                 >
-                  <div className="text-sm text-zinc-200 font-medium truncate">{item.name}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5 font-mono">
+                  <div className="text-sm text-stone-700 font-medium truncate">{item.name}</div>
+                  <div className="text-xs text-stone-400 mt-0.5 font-mono">
                     {ROOT_NAMES[item.keyRoot]} · {PATTERN_LABEL[item.pattern] ?? item.pattern} · {item.bpm} BPM · {formatDate(item.savedAt)}
                   </div>
                 </button>
                 <button
                   onClick={() => onDelete(item.id)}
-                  className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
+                  className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-stone-400 hover:text-red-500 hover:bg-red-50"
                 >
                   <IconX className="w-3.5 h-3.5" />
                 </button>

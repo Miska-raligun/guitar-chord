@@ -15,13 +15,13 @@ export default function SuffixSelector({ suffixes, selected, onChange }: Props) 
           onClick={() => onChange(suffix)}
           className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
             selected === suffix
-              ? 'bg-amber-500 text-zinc-950'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              ? 'bg-amber-500 text-stone-50'
+              : 'bg-amber-100 text-stone-600 hover:bg-amber-200 hover:text-stone-800'
           }`}
         >
           {suffix}
           {prettifySuffix(suffix) !== suffix && (
-            <span className="ml-1 text-zinc-500">·{prettifySuffix(suffix)}</span>
+            <span className="ml-1 text-stone-400 opacity-70">·{prettifySuffix(suffix)}</span>
           )}
         </button>
       ))}

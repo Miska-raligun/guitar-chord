@@ -31,18 +31,18 @@ export default function ApiConfigModal({ onClose }: Props) {
     onClose()
   }
 
-  const labelClass = 'text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5 block'
-  const inputClass = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30'
+  const labelClass = 'text-[10px] text-stone-400 uppercase tracking-wider font-medium mb-1.5 block'
+  const inputClass = 'w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-stone-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300/40'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/30 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end bg-stone-900/20 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full bg-zinc-900 border-t border-zinc-700/60 rounded-t-2xl p-5 pb-10 shadow-xl"
+        className="w-full bg-white border-t border-amber-200 rounded-t-2xl p-5 pb-10 shadow-xl shadow-amber-200/30"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <span className="text-sm font-semibold text-zinc-200">API 配置</span>
-          <button onClick={onClose} className="text-zinc-500 text-xs hover:text-zinc-300">取消</button>
+          <span className="text-sm font-semibold text-stone-800">API 配置</span>
+          <button onClick={onClose} className="text-stone-400 text-xs hover:text-stone-600">取消</button>
         </div>
 
         <div className="mb-4">
@@ -52,10 +52,10 @@ export default function ApiConfigModal({ onClose }: Props) {
               <button
                 key={p}
                 onClick={() => switchProvider(p)}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                className={`flex-1 py-2 rounded-xl text-sm font-medium ${
                   cfg.provider === p
-                    ? 'bg-amber-500 text-zinc-950'
-                    : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+                    ? 'bg-amber-500 text-stone-50'
+                    : 'bg-amber-100 text-stone-500 hover:text-stone-700 hover:bg-amber-200'
                 }`}
               >
                 {p === 'openai' ? 'OpenAI 兼容' : 'Anthropic'}
@@ -78,7 +78,7 @@ export default function ApiConfigModal({ onClose }: Props) {
         <div className="mb-3">
           <label className={labelClass}>
             Base URL
-            <span className="ml-1 normal-case text-zinc-600 font-normal">（可改为第三方代理地址）</span>
+            <span className="ml-1 normal-case text-stone-400 font-normal">（可改为第三方代理地址）</span>
           </label>
           <input type="text" value={cfg.baseUrl} onChange={e => update({ baseUrl: e.target.value })} className={inputClass} />
         </div>
@@ -90,7 +90,7 @@ export default function ApiConfigModal({ onClose }: Props) {
 
         <button
           onClick={handleSave}
-          className="w-full py-3 rounded-xl bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400"
+          className="w-full py-3 rounded-xl bg-amber-500 text-stone-50 font-semibold text-sm hover:bg-amber-600"
         >
           保存配置
         </button>
