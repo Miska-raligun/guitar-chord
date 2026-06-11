@@ -24,7 +24,7 @@ type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
   const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, play, stop } = useSequencer()
-  const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
+  const { list: savedList, save: saveComposition, remove: removeComposition, exportAll, importFrom } = useSavedCompositions()
   const { generate, isLoading: aiLoading, error: aiError, clearError: clearAiError } = useAiCompose()
   const [panel, setPanel]       = useState<Panel>(null)
   const [aiPrompt, setAiPrompt] = useState('')
@@ -244,6 +244,8 @@ export default function ComposeTab() {
           list={savedList}
           onLoad={item => { applyComposition(item); setPanel(null) }}
           onDelete={removeComposition}
+          onExport={exportAll}
+          onImport={importFrom}
           onClose={() => setPanel(null)}
         />
       )}
