@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { ChordSlot, MelodyNote, SequencerState } from '../../types/audio'
-import { getMasterSlotsPerBar, getMelodyDisplaySlots, cellToMasterSlot } from '../../hooks/useSequencer'
+import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../../types/audio'
+import { getMasterSlotsPerBar } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
 import NotePicker from './NotePicker'
 import { SOLFEGE } from './NotePicker'
@@ -15,47 +15,45 @@ interface Props {
 interface ChordPickerTarget { bar: number; slot: ChordSlot }
 interface NotePickerTarget  { bar: number; masterSlot: number; note: MelodyNote | null }
 
-// 单位格子宽度 + 格间距（px）
-const GAP = 2
-function getUnitCellW(displaySlots: number): number {
-  if (displaySlots <= 4)  return 22
-  if (displaySlots <= 6)  return 16
-  if (displaySlots <= 8)  return 14
-  if (displaySlots <= 12) return 11
-  return 9   // 16 cells
-}
-function chordCellW(displaySlots: number): number {
-  const cw = getUnitCellW(displaySlots)
-  return displaySlots * cw + (displaySlots - 1) * GAP
+const GAP = 2  // px between cells
+
+// Fixed chord/melody row width based on time signature (anchored to 8th-note density)
+function getBarWidth(timeSig: TimeSig): number {
+  const n8th = getMasterSlotsPerBar(timeSig) / 2  // number of 8th notes per bar
+  return n8th * 16 - GAP  // 14px per 8th note + 2px gap, minus trailing gap
 }
 
-// 计算一小节的显示单元：考虑跨格
 interface CellEntry {
-  masterSlot: number  // 音符起始槽（或空格槽）
+  masterSlot: number
   note: MelodyNote | null
-  spanCells: number   // 横跨格数
+  flex: number  // proportional width (= durationSlots in master slots)
 }
+
+// Traverse at master-slot level:
+// - Notes: occupy their exact duration
+// - Empties: snap to next noteDuration boundary (or next note)
 function renderBarCells(
   row: (MelodyNote | null)[],
-  noteDuration: SequencerState['noteDuration'],
+  noteDuration: number,
   masterSlotsPerBar: number,
 ): CellEntry[] {
-  const displaySlots = Math.max(1, Math.floor(masterSlotsPerBar / noteDuration))
   const result: CellEntry[] = []
-  let c = 0
-  while (c < displaySlots) {
-    const masterSlot = cellToMasterSlot(c, noteDuration)
-    const note = row[masterSlot] ?? null
+  let m = 0
+  while (m < masterSlotsPerBar) {
+    const note = row[m]
     if (note) {
-      const span = Math.max(1, Math.min(
-        Math.ceil(note.duration / noteDuration),
-        displaySlots - c,
-      ))
-      result.push({ masterSlot, note, spanCells: span })
-      c += span
+      const dur = Math.min(note.duration, masterSlotsPerBar - m)
+      result.push({ masterSlot: m, note, flex: dur })
+      m += dur
     } else {
-      result.push({ masterSlot, note: null, spanCells: 1 })
-      c++
+      // Advance to next noteDuration boundary, but stop early if a note is found
+      const boundary = Math.ceil((m + 1) / noteDuration) * noteDuration
+      let end = Math.min(boundary, masterSlotsPerBar)
+      for (let n = m + 1; n < end; n++) {
+        if (row[n]) { end = n; break }
+      }
+      result.push({ masterSlot: m, note: null, flex: end - m })
+      m = end
     }
   }
   return result
@@ -67,9 +65,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
 
   const { chords, melody, currentBar, keyRoot, noteDuration, timeSig } = state
   const masterSlotsPerBar = getMasterSlotsPerBar(timeSig)
-  const displaySlots      = getMelodyDisplaySlots(noteDuration, timeSig)
-  const unitCW            = getUnitCellW(displaySlots)
-  const totalChordW       = chordCellW(displaySlots)
+  const barW = getBarWidth(timeSig)
 
   function solfegeLabel(note: MelodyNote | null): string {
     if (!note) return ''
@@ -84,8 +80,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           {chords.map((slot, bar) => {
             const isActive = currentBar === bar
             const hasChord = slot.root !== null
-            const barRow   = melody[bar] ?? []
-            const cells    = renderBarCells(barRow, noteDuration, masterSlotsPerBar)
+            const cells = renderBarCells(melody[bar] ?? [], noteDuration, masterSlotsPerBar)
 
             return (
               <div key={bar} className="flex flex-col gap-1">
@@ -97,7 +92,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
                 {/* Chord cell */}
                 <button
                   onClick={() => setChordPicker({ bar, slot })}
-                  style={{ width: `${totalChordW}px` }}
+                  style={{ width: `${barW}px` }}
                   className={`h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
                     isActive
                       ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
@@ -118,18 +113,20 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
                   )}
                 </button>
 
-                {/* Melody cells with duration spanning */}
-                <div className="flex" style={{ gap: `${GAP}px` }}>
+                {/* Melody row — flex-grow proportional to duration */}
+                <div
+                  className="flex"
+                  style={{ width: `${barW}px`, gap: `${GAP}px` }}
+                >
                   {cells.map((cell, idx) => {
-                    const { masterSlot, note, spanCells } = cell
+                    const { masterSlot, note, flex } = cell
                     const label = solfegeLabel(note)
-                    const w = spanCells * unitCW + (spanCells - 1) * GAP
                     return (
                       <button
                         key={idx}
-                        style={{ width: `${w}px` }}
+                        style={{ flex, minWidth: 0 }}
                         onClick={() => setNotePicker({ bar, masterSlot, note })}
-                        className={`h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
+                        className={`h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center overflow-hidden ${
                           note
                             ? 'bg-amber-500/80 text-zinc-950'
                             : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
@@ -144,13 +141,13 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
             )
           })}
 
-          {/* Add bar button */}
+          {/* Add bar */}
           {onAddBar && (
             <div className="flex flex-col gap-1">
               <div className="text-[10px] text-center text-transparent">·</div>
               <button
                 onClick={onAddBar}
-                style={{ width: `${totalChordW}px` }}
+                style={{ width: `${barW}px` }}
                 className="h-[52px] rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xl font-light transition-all flex items-center justify-center"
               >
                 +
