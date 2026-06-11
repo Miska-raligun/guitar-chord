@@ -1,3 +1,4 @@
+import { IconPlay, IconStop } from '../ui/icons'
 import type { ChordPosition } from '../../types/chord'
 import type { ArpeggioPattern, ArpeggioState } from '../../types/audio'
 
@@ -51,10 +52,9 @@ export default function ArpeggioPlayer({
         className={`w-full py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-2 ${
           pattern === 'custom'
             ? 'bg-amber-500 text-zinc-950'
-            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-dashed border-zinc-600'
+            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-dashed border-zinc-700'
         }`}
       >
-        <span className="text-base">✎</span>
         <span>自定义节奏型</span>
       </button>
 
@@ -70,13 +70,16 @@ export default function ArpeggioPlayer({
 
       <button
         onClick={() => isPlaying ? onStop() : onPlay(position, pattern, bpm)}
-        className={`w-full py-3 rounded-xl font-medium transition-colors ${
+        className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
           isPlaying
-            ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+            ? 'bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
             : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
         }`}
       >
-        {isPlaying ? '⏹ 停止播放' : '▶ 播放伴奏'}
+        {isPlaying
+          ? <><IconStop className="w-4 h-4" /> 停止</>
+          : <><IconPlay className="w-4 h-4" /> 播放伴奏</>
+        }
       </button>
     </div>
   )
