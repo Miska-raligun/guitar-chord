@@ -75,15 +75,13 @@ export default function ApiConfigModal({ onClose }: Props) {
           />
         </div>
 
-        {cfg.provider === 'openai' && (
-          <div className="mb-3">
-            <label className={labelClass}>
-              Base URL
-              <span className="ml-1 normal-case text-zinc-600 font-normal">（可改为兼容代理）</span>
-            </label>
-            <input type="text" value={cfg.baseUrl} onChange={e => update({ baseUrl: e.target.value })} className={inputClass} />
-          </div>
-        )}
+        <div className="mb-3">
+          <label className={labelClass}>
+            Base URL
+            <span className="ml-1 normal-case text-zinc-600 font-normal">（可改为第三方代理地址）</span>
+          </label>
+          <input type="text" value={cfg.baseUrl} onChange={e => update({ baseUrl: e.target.value })} className={inputClass} />
+        </div>
 
         <div className="mb-6">
           <label className={labelClass}>模型</label>

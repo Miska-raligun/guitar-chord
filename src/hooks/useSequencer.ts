@@ -3,15 +3,17 @@ import { pluckStringAt, stopAllNodes } from '../audio/karplusStrong'
 import audioEngine from '../audio/AudioEngine'
 import { OPEN_STRING_FREQS } from '../types/chord'
 import type { ChordPosition } from '../types/chord'
-import type { ChordSlot, MelodyNote, SequencerState } from '../types/audio'
+import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import { useChordDb } from './useChordDb'
 
-const NUM_BARS = 8
+const INITIAL_BARS = 8
+const MAX_BARS     = 32
+const MELODY_SLOTS = 8  // always store 8 eighth-note slots per bar
 
 type PatternStep = number | number[]
-const BASS      = -10
-const MUTE_BASS = -11
-const REST      = -20
+const BASS       = -10
+const MUTE_BASS  = -11
+const REST       = -20
 const STRUM_DOWN = -30
 const STRUM_UP   = -31
 
@@ -27,16 +29,22 @@ function getPatternSteps(pat: SequencerState['pattern']): PatternStep[] {
   if (pat === '53231323') return PATTERN_53231323
   if (pat === 'x3231323') return PATTERN_X3231323
   if (pat === '3_12_3')   return PATTERN_3_12_3
-  // strum: 4 quarter-note downstrokes
   return [STRUM_DOWN, STRUM_DOWN, STRUM_DOWN, STRUM_DOWN]
 }
 
-function getStepsPerBar(pat: SequencerState['pattern']): number {
-  return pat === '53231323' || pat === 'x3231323' ? 8 : 4
+// Steps per bar: determined by pattern type AND time signature
+// 8-step patterns (folk): 4/4→8, 3/4→6, 6/8→6, 2/4→4
+// 4-step patterns (strum/classical): 4/4→4, 3/4→3, 6/8→3, 2/4→2
+export function getStepsPerBar(pat: SequencerState['pattern'], timeSig: TimeSig): number {
+  const is8step = pat === '53231323' || pat === 'x3231323'
+  if (timeSig === '4/4') return is8step ? 8 : 4
+  if (timeSig === '3/4' || timeSig === '6/8') return is8step ? 6 : 3
+  return is8step ? 4 : 2  // 2/4
 }
 
-function getSPerStep(pat: SequencerState['pattern'], bpm: number): number {
-  return getStepsPerBar(pat) === 8 ? 60 / bpm / 2 : 60 / bpm
+// Step duration: stepsPerBar >= 5 → eighth note, else quarter note
+function getSPerStep(stepsPerBar: number, bpm: number): number {
+  return stepsPerBar >= 5 ? 60 / bpm / 2 : 60 / bpm
 }
 
 function getBassString(pos: ChordPosition): number {
@@ -52,23 +60,20 @@ function getFreq(pos: ChordPosition, strIdx: number): number | null {
   return OPEN_STRING_FREQS[strIdx] * Math.pow(2, fret / 12)
 }
 
-// Maps absolute semitone (0-11, C=0) to a frequency in the C4-B4 range
 function semitoneToFreq(semitone: number): number {
   if (semitone >= 4) {
-    // ①e string (E4), fret = semitone - 4
     return OPEN_STRING_FREQS[5] * Math.pow(2, (semitone - 4) / 12)
   } else {
-    // ②B string (B3), fret = semitone + 1 gives C4..Eb4
     return OPEN_STRING_FREQS[4] * Math.pow(2, (semitone + 1) / 12)
   }
 }
 
-function makeEmptyChords(): ChordSlot[] {
-  return Array.from({ length: NUM_BARS }, () => ({ root: null, suffix: null, positionIndex: 0 }))
+function makeEmptyChords(n = INITIAL_BARS): ChordSlot[] {
+  return Array.from({ length: n }, () => ({ root: null, suffix: null, positionIndex: 0 }))
 }
 
-function makeEmptyMelody(): (MelodyNote | null)[][] {
-  return Array.from({ length: NUM_BARS }, () => Array(4).fill(null))
+function makeEmptyMelody(n = INITIAL_BARS): (MelodyNote | null)[][] {
+  return Array.from({ length: n }, () => Array(MELODY_SLOTS).fill(null))
 }
 
 export function useSequencer() {
@@ -76,6 +81,7 @@ export function useSequencer() {
     bpm: 80,
     pattern: '53231323',
     keyRoot: 0,
+    timeSig: '4/4',
     chords: makeEmptyChords(),
     melody: makeEmptyMelody(),
     isPlaying: false,
@@ -90,14 +96,14 @@ export function useSequencer() {
   const genRef       = useRef(0)
   const posRef       = useRef<ChordPosition | null>(null)
 
-  // Mutable refs kept in sync with state for use inside setInterval callbacks
-  const chordsRef  = useRef(state.chords)
-  const melodyRef  = useRef(state.melody)
-  const patternRef = useRef(state.pattern)
-  const bpmRef     = useRef(state.bpm)
+  const chordsRef   = useRef(state.chords)
+  const melodyRef   = useRef(state.melody)
+  const patternRef  = useRef(state.pattern)
+  const bpmRef      = useRef(state.bpm)
+  const timeSigRef  = useRef(state.timeSig)
 
-  useEffect(() => { chordsRef.current = state.chords }, [state.chords])
-  useEffect(() => { melodyRef.current = state.melody }, [state.melody])
+  useEffect(() => { chordsRef.current  = state.chords  }, [state.chords])
+  useEffect(() => { melodyRef.current  = state.melody  }, [state.melody])
 
   const scheduleStep = useCallback((step: PatternStep, time: number, isBass: boolean, pos: ChordPosition) => {
     if (step === REST) return
@@ -134,18 +140,19 @@ export function useSequencer() {
   }, [])
 
   const schedulerTick = useCallback(() => {
-    const ctx     = audioEngine.getContext()
-    const gen     = genRef.current
-    const pat     = patternRef.current
-    const bpm     = bpmRef.current
-    const steps   = getPatternSteps(pat)
-    const spb     = getStepsPerBar(pat)
-    const sPerStep = getSPerStep(pat, bpm)
-    const stepsPerBeat = spb / 4
-    const totalSteps = NUM_BARS * spb
+    const ctx      = audioEngine.getContext()
+    const gen      = genRef.current
+    const pat      = patternRef.current
+    const bpm      = bpmRef.current
+    const timeSig  = timeSigRef.current
+    const steps    = getPatternSteps(pat)
+    const spb      = getStepsPerBar(pat, timeSig)
+    const sPerStep = getSPerStep(spb, bpm)
+    const numBars  = chordsRef.current.length
+    const total    = numBars * spb
 
     while (nextTimeRef.current < ctx.currentTime + 0.1) {
-      const globalStep = stepRef.current % totalSteps
+      const globalStep = stepRef.current % total
       const bar        = Math.floor(globalStep / spb)
       const stepInBar  = globalStep % spb
 
@@ -163,16 +170,14 @@ export function useSequencer() {
       }
 
       if (posRef.current) {
-        scheduleStep(steps[stepInBar], nextTimeRef.current, stepInBar === 0, posRef.current)
+        // stepInBar % steps.length: handles spb < pattern.length gracefully
+        scheduleStep(steps[stepInBar % steps.length], nextTimeRef.current, stepInBar === 0, posRef.current)
       }
 
-      // Overlay melody note at each beat boundary
-      if (stepInBar % stepsPerBeat === 0) {
-        const beat = stepInBar / stepsPerBeat
-        const note = melodyRef.current[bar]?.[beat]
-        if (note) {
-          pluckStringAt(semitoneToFreq(note.semitone), nextTimeRef.current + 0.005, 0.85)
-        }
+      // Melody fires at every arpeggio step — stepInBar maps directly to melody slot
+      const note = melodyRef.current[bar]?.[stepInBar]
+      if (note) {
+        pluckStringAt(semitoneToFreq(note.semitone), nextTimeRef.current + 0.005, 0.85)
       }
 
       nextTimeRef.current += sPerStep
@@ -215,10 +220,10 @@ export function useSequencer() {
     })
   }, [])
 
-  const setMelodyNote = useCallback((bar: number, beat: number, note: MelodyNote | null) => {
+  const setMelodyNote = useCallback((bar: number, slot: number, note: MelodyNote | null) => {
     setState(s => {
       const melody = s.melody.map((row, i) =>
-        i === bar ? row.map((n, j) => j === beat ? note : n) : row
+        i === bar ? row.map((n, j) => j === slot ? note : n) : row
       )
       melodyRef.current = melody
       return { ...s, melody }
@@ -239,7 +244,34 @@ export function useSequencer() {
     setState(s => ({ ...s, keyRoot }))
   }, [])
 
+  const setTimeSig = useCallback((timeSig: TimeSig) => {
+    timeSigRef.current = timeSig
+    setState(s => ({ ...s, timeSig }))
+  }, [])
+
+  const addBar = useCallback(() => {
+    setState(s => {
+      if (s.chords.length >= MAX_BARS) return s
+      const chords = [...s.chords, { root: null, suffix: null, positionIndex: 0 }]
+      const melody = [...s.melody, Array(MELODY_SLOTS).fill(null)]
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
+  const removeLastBar = useCallback(() => {
+    setState(s => {
+      if (s.chords.length <= 1) return s
+      const chords = s.chords.slice(0, -1)
+      const melody = s.melody.slice(0, -1)
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
   useEffect(() => () => stop(), [stop])
 
-  return { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, play, stop }
+  return { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, addBar, removeLastBar, play, stop }
 }

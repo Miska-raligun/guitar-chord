@@ -1,24 +1,33 @@
 import { useState } from 'react'
 import type { ChordSlot, MelodyNote, SequencerState } from '../../types/audio'
+import { getStepsPerBar } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
 import NotePicker from './NotePicker'
 import { SOLFEGE } from './NotePicker'
-import { ROOTS } from '../../utils/dbUtils'
 
 interface Props {
   state: SequencerState
   onChordChange: (bar: number, slot: ChordSlot) => void
-  onMelodyChange: (bar: number, beat: number, note: MelodyNote | null) => void
+  onMelodyChange: (bar: number, slot: number, note: MelodyNote | null) => void
+  onAddBar?: () => void
 }
 
 interface ChordPickerTarget { bar: number; slot: ChordSlot }
-interface NotePickerTarget  { bar: number; beat: number; note: MelodyNote | null }
+interface NotePickerTarget  { bar: number; slot: number; note: MelodyNote | null }
 
-export default function SequencerGrid({ state, onChordChange, onMelodyChange }: Props) {
+function getGridDims(spb: number) {
+  if (spb <= 4) return { chordW: 96,  cellW: 22 }
+  if (spb <= 6) return { chordW: 106, cellW: 16 }
+  return              { chordW: 126,  cellW: 14 }  // 8 slots
+}
+
+export default function SequencerGrid({ state, onChordChange, onMelodyChange, onAddBar }: Props) {
   const [chordPicker, setChordPicker] = useState<ChordPickerTarget | null>(null)
   const [notePicker,  setNotePicker]  = useState<NotePickerTarget | null>(null)
 
-  const { chords, melody, currentBar, keyRoot } = state
+  const { chords, melody, currentBar, keyRoot, pattern, timeSig } = state
+  const stepsPerBar = getStepsPerBar(pattern, timeSig)
+  const { chordW, cellW } = getGridDims(stepsPerBar)
 
   function solfegeLabel(note: MelodyNote | null): string {
     if (!note) return ''
@@ -44,7 +53,8 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
                 {/* Chord cell */}
                 <button
                   onClick={() => setChordPicker({ bar, slot })}
-                  className={`w-[96px] h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
+                  style={{ width: `${chordW}px` }}
+                  className={`h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
                     isActive
                       ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
                       : hasChord
@@ -62,20 +72,21 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
                       </span>
                     </>
                   ) : (
-                    <span className="text-zinc-500 text-xs">点击选和弦</span>
+                    <span className="text-zinc-500 text-xs">+</span>
                   )}
                 </button>
 
-                {/* Melody beat cells (4 per bar) */}
+                {/* Melody slots — stepsPerBar cells */}
                 <div className="flex gap-0.5">
-                  {Array.from({ length: 4 }, (_, beat) => {
-                    const note = melody[bar]?.[beat] ?? null
+                  {Array.from({ length: stepsPerBar }, (_, s) => {
+                    const note  = melody[bar]?.[s] ?? null
                     const label = solfegeLabel(note)
                     return (
                       <button
-                        key={beat}
-                        onClick={() => setNotePicker({ bar, beat, note })}
-                        className={`w-[22px] h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
+                        key={s}
+                        onClick={() => setNotePicker({ bar, slot: s, note })}
+                        style={{ width: `${cellW}px` }}
+                        className={`h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
                           note
                             ? 'bg-amber-500/80 text-zinc-950'
                             : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
@@ -89,15 +100,27 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
               </div>
             )
           })}
+
+          {/* Add bar button */}
+          {onAddBar && (
+            <div className="flex flex-col gap-1">
+              <div className="text-[10px] text-center text-transparent">{chords.length + 1}</div>
+              <button
+                onClick={onAddBar}
+                style={{ width: `${chordW}px` }}
+                className="h-[52px] rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xl font-light transition-all flex items-center justify-center"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {chordPicker && (
         <ChordCellPicker
           slot={chordPicker.slot}
-          onSelect={slot => {
-            onChordChange(chordPicker.bar, slot)
-          }}
+          onSelect={slot => onChordChange(chordPicker.bar, slot)}
           onClose={() => setChordPicker(null)}
         />
       )}
@@ -107,7 +130,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
           keyRoot={keyRoot}
           selected={notePicker.note}
           onSelect={note => {
-            onMelodyChange(notePicker.bar, notePicker.beat, note)
+            onMelodyChange(notePicker.bar, notePicker.slot, note)
             setNotePicker(null)
           }}
           onClose={() => setNotePicker(null)}

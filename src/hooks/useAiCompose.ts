@@ -10,7 +10,7 @@ Schema:
   "pattern": "53231323"|"x3231323"|"3_12_3"|"strum",
   "keyRoot": <integer 0-11>,
   "chords": [exactly 8 items: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
-  "melody": [exactly 8 items (one per bar): [4 beats: {"semitone": <integer 0-11>}|null]]
+  "melody": [exactly 8 items (one per bar): [8 eighth-note slots: {"semitone": <integer 0-11>}|null]]
 }
 
 keyRoot: C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11
@@ -52,7 +52,8 @@ async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
 }
 
 async function callAnthropic(prompt: string, config: ApiConfig): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const url = `${config.baseUrl.replace(/\/$/, '')}/v1/messages`
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -96,15 +97,17 @@ function parseComposition(raw: string): AiComposition {
   while (chords.length < 8) chords.push({ root: null, suffix: null, positionIndex: 0 })
 
   const melody: (MelodyNote | null)[][] = Array.isArray(obj.melody)
-    ? obj.melody.slice(0, 8).map((bar: ({ semitone?: number } | null)[]) =>
-        Array.isArray(bar)
-          ? bar.slice(0, 4).map((n: { semitone?: number } | null) =>
+    ? obj.melody.slice(0, 8).map((bar: ({ semitone?: number } | null)[]) => {
+        const slots: (MelodyNote | null)[] = Array.isArray(bar)
+          ? bar.slice(0, 8).map((n: { semitone?: number } | null) =>
               n && typeof n.semitone === 'number' ? { semitone: Math.max(0, Math.min(11, n.semitone)) } : null
             )
-          : [null, null, null, null]
-      )
+          : []
+        while (slots.length < 8) slots.push(null)
+        return slots
+      })
     : []
-  while (melody.length < 8) melody.push([null, null, null, null])
+  while (melody.length < 8) melody.push(Array(8).fill(null))
 
   return { bpm, pattern, keyRoot, chords, melody }
 }

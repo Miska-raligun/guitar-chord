@@ -26,6 +26,7 @@ export function useSavedCompositions() {
       bpm: state.bpm,
       pattern: state.pattern,
       keyRoot: state.keyRoot,
+      timeSig: state.timeSig,
       chords: state.chords,
       melody: state.melody,
     }

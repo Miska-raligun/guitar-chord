@@ -21,16 +21,17 @@ const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
 type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
-  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, play, stop } = useSequencer()
+  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, addBar, removeLastBar, play, stop } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
   const [panel, setPanel] = useState<Panel>(null)
-  const { isPlaying, bpm, pattern, keyRoot } = state
+  const { isPlaying, bpm, pattern, keyRoot, timeSig } = state
 
   function applyComposition(src: AiComposition | SavedComposition) {
     stop()
     setBpm(src.bpm)
     setPattern(src.pattern)
     setKeyRoot(src.keyRoot)
+    if ('timeSig' in src && src.timeSig) setTimeSig(src.timeSig)
     src.chords.forEach((slot, i) => setChordSlot(i, slot))
     src.melody.forEach((bar, i) => bar.forEach((note, j) => setMelodyNote(i, j, note)))
   }
@@ -64,6 +65,22 @@ export default function ComposeTab() {
               }`}
             >
               {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {(['4/4', '3/4', '6/8', '2/4'] as const).map(ts => (
+            <button
+              key={ts}
+              onClick={() => setTimeSig(ts)}
+              className={`px-2 py-2 rounded-md text-xs font-mono font-medium ${
+                timeSig === ts
+                  ? 'bg-amber-500 text-zinc-950'
+                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
+              }`}
+            >
+              {ts}
             </button>
           ))}
         </div>
@@ -115,6 +132,7 @@ export default function ComposeTab() {
           state={state}
           onChordChange={setChordSlot}
           onMelodyChange={setMelodyNote}
+          onAddBar={addBar}
         />
 
         {state.chords.every(c => c.root === null) && (
@@ -127,7 +145,7 @@ export default function ComposeTab() {
       </div>
 
       {/* Play / Stop */}
-      <div className="flex gap-3 px-5 py-3.5 bg-zinc-900 border-t border-zinc-800">
+      <div className="flex gap-2 px-4 py-3.5 bg-zinc-900 border-t border-zinc-800">
         <button
           onClick={isPlaying ? stop : play}
           className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
@@ -141,6 +159,15 @@ export default function ComposeTab() {
             : <><IconPlay className="w-4 h-4" /> 循环播放</>
           }
         </button>
+        {state.chords.length > 1 && (
+          <button
+            onClick={removeLastBar}
+            className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-400 text-xs hover:bg-zinc-700 hover:text-zinc-200 border border-zinc-700"
+            title="删除最后一节"
+          >
+            −节
+          </button>
+        )}
       </div>
 
       {panel === 'ai' && (
