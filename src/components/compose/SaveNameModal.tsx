@@ -30,7 +30,7 @@ export default function SaveNameModal({ defaultName = '', onSave, onClose }: Pro
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           placeholder="未命名编曲"
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 mb-4 placeholder:text-zinc-600"
+          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 mb-4 placeholder:text-zinc-500"
         />
 
         <div className="flex gap-2">

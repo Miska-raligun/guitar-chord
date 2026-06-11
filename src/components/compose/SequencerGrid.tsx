@@ -44,7 +44,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
                 {/* Chord cell */}
                 <button
                   onClick={() => setChordPicker({ bar, slot })}
-                  className={`w-[84px] h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
+                  className={`w-[96px] h-[52px] rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
                     isActive
                       ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
                       : hasChord
@@ -62,7 +62,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
                       </span>
                     </>
                   ) : (
-                    <span className="text-zinc-600 text-xs">点击选和弦</span>
+                    <span className="text-zinc-500 text-xs">点击选和弦</span>
                   )}
                 </button>
 
@@ -75,10 +75,10 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange }: 
                       <button
                         key={beat}
                         onClick={() => setNotePicker({ bar, beat, note })}
-                        className={`w-[19px] h-[28px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
+                        className={`w-[22px] h-[32px] rounded text-[9px] font-bold transition-colors flex items-center justify-center ${
                           note
                             ? 'bg-amber-500/80 text-zinc-950'
-                            : 'bg-zinc-800 text-zinc-700 hover:bg-zinc-700'
+                            : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
                         }`}
                       >
                         {label || '·'}

@@ -59,10 +59,10 @@ export default function NotePicker({ keyRoot, selected, onSelect, onClose }: Pro
               <button
                 key={offset}
                 onClick={() => onSelect({ semitone })}
-                className={`py-2 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                className={`py-2.5 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950'
-                    : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                 }`}
               >
                 <span className="font-bold">{SOLFEGE[idx]}</span>
@@ -74,7 +74,7 @@ export default function NotePicker({ keyRoot, selected, onSelect, onClose }: Pro
 
         <button
           onClick={() => onSelect(null)}
-          className="w-full py-2 rounded-lg bg-zinc-800 text-zinc-400 text-sm hover:bg-zinc-700 transition-colors"
+          className="w-full py-2.5 rounded-lg bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 transition-colors"
         >
           清除音符
         </button>

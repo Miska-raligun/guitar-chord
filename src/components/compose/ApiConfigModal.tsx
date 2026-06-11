@@ -32,7 +32,7 @@ export default function ApiConfigModal({ onClose }: Props) {
   }
 
   const labelClass = 'text-[10px] text-zinc-500 uppercase tracking-wider font-medium mb-1.5 block'
-  const inputClass = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50'
+  const inputClass = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/30 backdrop-blur-sm" onClick={onClose}>

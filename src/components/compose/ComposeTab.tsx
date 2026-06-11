@@ -57,10 +57,10 @@ export default function ComposeTab() {
             <button
               key={p.id}
               onClick={() => setPattern(p.id)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+              className={`px-2.5 py-2 rounded-md text-xs font-medium ${
                 pattern === p.id
                   ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+                  : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
               }`}
             >
               {p.label}
@@ -85,21 +85,21 @@ export default function ComposeTab() {
       <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800/60">
         <button
           onClick={() => setPanel('ai')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-zinc-800 text-zinc-400 text-xs font-medium hover:text-zinc-200 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
         >
           <IconWand className="w-3.5 h-3.5" />
           AI 创作
         </button>
         <button
           onClick={() => setPanel('save')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-zinc-800 text-zinc-400 text-xs font-medium hover:text-zinc-200 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
         >
           <IconSave className="w-3.5 h-3.5" />
           保存
         </button>
         <button
           onClick={() => setPanel('library')}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md bg-zinc-800 text-zinc-400 text-xs font-medium hover:text-zinc-200 hover:bg-zinc-700"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-zinc-800 text-zinc-300 text-xs font-medium hover:text-zinc-100 hover:bg-zinc-700"
         >
           <IconLibrary className="w-3.5 h-3.5" />
           曲库

@@ -53,7 +53,7 @@ export default function AiPanel({ onGenerate, onClose }: Props) {
           onChange={e => { setPrompt(e.target.value); clearError() }}
           placeholder="描述你想要的风格，例如：C 大调舒缓民谣，BPM 70，带旋律..."
           rows={3}
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 resize-none mb-3 placeholder:text-zinc-600"
+          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 resize-none mb-3 placeholder:text-zinc-500"
         />
 
         {error && (

@@ -23,7 +23,7 @@ export default function TabBar({ active, onChange }: Props) {
           <button
             key={id}
             onClick={() => onChange(id)}
-            className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
+            className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors ${
               isActive
                 ? 'text-amber-400 border-b-2 border-amber-500'
                 : 'text-zinc-500 hover:text-zinc-300'

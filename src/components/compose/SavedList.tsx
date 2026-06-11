@@ -58,7 +58,7 @@ export default function SavedList({ list, onLoad, onDelete, onClose }: Props) {
                 </button>
                 <button
                   onClick={() => onDelete(item.id)}
-                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-zinc-600 hover:text-red-400 hover:bg-red-400/10"
+                  className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
                 >
                   <IconX className="w-3.5 h-3.5" />
                 </button>

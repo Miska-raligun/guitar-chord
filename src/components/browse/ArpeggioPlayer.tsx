@@ -26,7 +26,7 @@ export default function ArpeggioPlayer({
 
   return (
     <div className="w-full space-y-3">
-      <div className="text-xs text-zinc-500 uppercase tracking-wider">伴奏节奏型</div>
+      <div className="text-xs text-zinc-400 uppercase tracking-wider">伴奏节奏型</div>
 
       {/* 2列×3行，最后一个占满一行 */}
       <div className="grid grid-cols-2 gap-2">

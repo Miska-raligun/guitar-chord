@@ -48,11 +48,11 @@ export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => { onSelect({ root: null, suffix: null, positionIndex: 0 }); onClose() }}
-              className="text-zinc-500 text-sm hover:text-zinc-300"
+              className="py-2 px-3 rounded-lg text-zinc-400 text-sm hover:text-zinc-200 hover:bg-zinc-800"
             >
               清空
             </button>
-            <button onClick={onClose} className="text-zinc-500 text-sm hover:text-zinc-300">确定</button>
+            <button onClick={onClose} className="py-2 px-3 rounded-lg text-zinc-400 text-sm hover:text-zinc-200 hover:bg-zinc-800">确定</button>
           </div>
         </div>
 
