@@ -1,8 +1,10 @@
 const FFT_SIZE = 8192
 const GUITAR_LOW_HZ  = 75.0
 const GUITAR_HIGH_HZ = 1400.0
-// Below this absolute peak → no guitar signal → return zeros so caller detects silence
-const ABS_SIGNAL_THRESHOLD_DB = -50
+// Below this absolute peak → no guitar signal → return zeros so caller detects silence.
+// Keep this generous: typical laptop mics peak around -55 to -70 dBFS for an acoustic
+// guitar, and the analyser's smoothing lowers peaks further. -50 silenced real playing.
+const ABS_SIGNAL_THRESHOLD_DB = -70
 // Ignore bins more than this many dB below the peak in-range bin
 const REL_NOISE_FLOOR_DB = 42
 
@@ -39,7 +41,7 @@ export function extractChromagram(freqData: Float32Array<ArrayBufferLike>, sampl
     const lo   = Math.floor(midi)
     const frac = midi - lo                           // weight for the higher semitone
     const pcLo = ((lo     % 12) + 12) % 12
-    const pcHi = ((lo + 1 % 12) + 12) % 12
+    const pcHi = (((lo + 1) % 12) + 12) % 12
     chroma[pcLo] += mag * (1 - frac)
     chroma[pcHi] += mag * frac
   }
