@@ -103,7 +103,7 @@ function parseComposition(raw: string): AiComposition {
         if (Array.isArray(bar)) {
           bar.slice(0, 8).forEach((n: { semitone?: number } | null, i: number) => {
             if (n && typeof n.semitone === 'number') {
-              master[i * 2] = { semitone: Math.max(0, Math.min(11, n.semitone)) }
+              master[i * 2] = { semitone: Math.max(0, Math.min(11, n.semitone)), duration: 2 }
             }
           })
         }

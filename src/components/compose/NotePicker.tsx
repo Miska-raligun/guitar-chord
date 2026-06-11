@@ -7,12 +7,13 @@ const SOLFEGE_NAME = ['Do', '♯Do', 'Re', '♯Re', 'Mi', 'Fa', '♯Fa', 'Sol', 
 
 interface Props {
   keyRoot: number
+  noteDuration: number
   selected: MelodyNote | null
   onSelect: (note: MelodyNote | null) => void
   onClose: () => void
 }
 
-export default function NotePicker({ keyRoot, selected, onSelect, onClose }: Props) {
+export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, onClose }: Props) {
   // Build buttons for the 7 natural scale degrees (C major scale intervals: 0,2,4,5,7,9,11)
   // Show all 12 chromatic notes arranged in two rows: natural (7) + chromatic (5)
   const chromaticOrder = [0, 2, 4, 5, 7, 9, 11, 1, 3, 6, 8, 10]
@@ -36,7 +37,7 @@ export default function NotePicker({ keyRoot, selected, onSelect, onClose }: Pro
             return (
               <button
                 key={offset}
-                onClick={() => onSelect({ semitone })}
+                onClick={() => onSelect({ semitone, duration: noteDuration })}
                 className={`py-2.5 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950'
@@ -58,7 +59,7 @@ export default function NotePicker({ keyRoot, selected, onSelect, onClose }: Pro
             return (
               <button
                 key={offset}
-                onClick={() => onSelect({ semitone })}
+                onClick={() => onSelect({ semitone, duration: noteDuration })}
                 className={`py-2.5 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                   isSelected
                     ? 'bg-amber-500 text-zinc-950'

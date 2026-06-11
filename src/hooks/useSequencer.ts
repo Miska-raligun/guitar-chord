@@ -52,14 +52,14 @@ function getMasterSPerStep(bpm: number): number {
   return 60 / bpm / 4
 }
 
-// 当前旋律精度下显示的格子数
-export function getMelodyDisplaySlots(melodyRes: SequencerState['melodyRes'], timeSig: TimeSig): number {
-  return Math.round(getMasterSlotsPerBar(timeSig) / (MASTER_SLOTS / melodyRes))
+// 当前时值下显示的格子数
+export function getMelodyDisplaySlots(noteDuration: SequencerState['noteDuration'], timeSig: TimeSig): number {
+  return Math.max(1, Math.floor(getMasterSlotsPerBar(timeSig) / noteDuration))
 }
 
-// 显示格子 c → 主网格槽位
-export function cellToMasterSlot(cell: number, melodyRes: SequencerState['melodyRes']): number {
-  return cell * (MASTER_SLOTS / melodyRes)
+// 显示格子 c → 主网格起始槽位
+export function cellToMasterSlot(cell: number, noteDuration: SequencerState['noteDuration']): number {
+  return cell * noteDuration
 }
 
 function getBassString(pos: ChordPosition): number {
@@ -97,7 +97,7 @@ export function useSequencer() {
     pattern: '53231323',
     keyRoot: 0,
     timeSig: '4/4',
-    melodyRes: 8,
+    noteDuration: 2,
     chords: makeEmptyChords(),
     melody: makeEmptyMelody(),
     isPlaying: false,
@@ -242,9 +242,23 @@ export function useSequencer() {
 
   const setMelodyNote = useCallback((bar: number, masterSlot: number, note: MelodyNote | null) => {
     setState(s => {
-      const melody = s.melody.map((row, i) =>
-        i === bar ? row.map((n, j) => j === masterSlot ? note : n) : row
-      )
+      const melody = s.melody.map((row, i) => {
+        if (i !== bar) return row
+        const newRow = [...row]
+        if (note === null) {
+          newRow[masterSlot] = null
+        } else {
+          // Clear any existing note whose duration overlaps the new note's range
+          for (let m = 0; m < MASTER_SLOTS; m++) {
+            const existing = newRow[m]
+            if (!existing) continue
+            const overlaps = m < masterSlot + note.duration && m + existing.duration > masterSlot
+            if (overlaps) newRow[m] = null
+          }
+          newRow[masterSlot] = note
+        }
+        return newRow
+      })
       melodyRef.current = melody
       return { ...s, melody }
     })
@@ -269,8 +283,8 @@ export function useSequencer() {
     setState(s => ({ ...s, timeSig }))
   }, [])
 
-  const setMelodyRes = useCallback((melodyRes: SequencerState['melodyRes']) => {
-    setState(s => ({ ...s, melodyRes }))
+  const setNoteDuration = useCallback((noteDuration: SequencerState['noteDuration']) => {
+    setState(s => ({ ...s, noteDuration }))
   }, [])
 
   const addBar = useCallback(() => {
@@ -300,6 +314,6 @@ export function useSequencer() {
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setMelodyRes, addBar, removeLastBar, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, play, stop,
   }
 }

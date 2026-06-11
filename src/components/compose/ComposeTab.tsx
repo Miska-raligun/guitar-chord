@@ -21,10 +21,10 @@ const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
 type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
-  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setMelodyRes, addBar, removeLastBar, play, stop } = useSequencer()
+  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, addBar, removeLastBar, play, stop } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
   const [panel, setPanel] = useState<Panel>(null)
-  const { isPlaying, bpm, pattern, keyRoot, timeSig, melodyRes } = state
+  const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
 
   function applyComposition(src: AiComposition | SavedComposition) {
     stop()
@@ -32,7 +32,7 @@ export default function ComposeTab() {
     setPattern(src.pattern)
     setKeyRoot(src.keyRoot)
     if ('timeSig' in src && src.timeSig) setTimeSig(src.timeSig)
-    if ('melodyRes' in src && src.melodyRes) setMelodyRes(src.melodyRes)
+    if ('noteDuration' in src && src.noteDuration) setNoteDuration(src.noteDuration)
     src.chords.forEach((slot, i) => setChordSlot(i, slot))
     src.melody.forEach((bar, i) => bar.forEach((note, j) => setMelodyNote(i, j, note)))
   }
@@ -87,18 +87,24 @@ export default function ComposeTab() {
         </div>
 
         <div className="flex items-center gap-1">
-          {([4, 8, 16] as const).map(r => (
+          {([
+            { d: 16 as const, label: '全', title: '全音符' },
+            { d: 8  as const, label: '半', title: '二分音符' },
+            { d: 4  as const, label: '♩', title: '四分音符' },
+            { d: 2  as const, label: '♪', title: '八分音符' },
+            { d: 1  as const, label: '♬', title: '十六分音符' },
+          ]).map(({ d, label, title }) => (
             <button
-              key={r}
-              onClick={() => setMelodyRes(r)}
-              title={r === 4 ? '四分音符' : r === 8 ? '八分音符' : '十六分音符'}
+              key={d}
+              onClick={() => setNoteDuration(d)}
+              title={title}
               className={`px-2 py-2 rounded-md text-xs font-medium ${
-                melodyRes === r
+                noteDuration === d
                   ? 'bg-amber-500 text-zinc-950'
                   : 'bg-zinc-800 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700'
               }`}
             >
-              {r === 4 ? '♩' : r === 8 ? '♪' : '♬'}
+              {label}
             </button>
           ))}
         </div>

@@ -45,6 +45,7 @@ export interface ChordSlot {
 
 export interface MelodyNote {
   semitone: number          // 0-11，绝对半音（C=0）
+  duration: number          // 时值，单位：主网格槽（十六分=1, 八分=2, 四分=4, 半=8, 全=16）
 }
 
 export interface SequencerState {
@@ -52,7 +53,7 @@ export interface SequencerState {
   pattern: Exclude<ArpeggioPattern, 'custom'>
   keyRoot: number           // 0-11，用于显示 solfège 标注
   timeSig: TimeSig          // 拍号
-  melodyRes: 4 | 8 | 16    // 旋律精度（四分/八分/十六分音符）
+  noteDuration: 1 | 2 | 4 | 8 | 16  // 当前输入时值（十六分/八分/四分/半/全音符，主网格槽数）
   chords: ChordSlot[]       // length = numBars
   melody: (MelodyNote | null)[][]  // [bar][masterSlot=0..15]，十六分音符主网格
   isPlaying: boolean
