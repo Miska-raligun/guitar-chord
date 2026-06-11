@@ -309,6 +309,25 @@ export function useSequencer() {
     })
   }, [])
 
+  const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'] as const
+  const transpose = useCallback((semitones: number) => {
+    setState(s => {
+      const shift = ((semitones % 12) + 12) % 12
+      const chords = s.chords.map(slot => {
+        if (!slot.root) return slot
+        const idx = ROOTS.indexOf(slot.root as typeof ROOTS[number])
+        return { ...slot, root: ROOTS[(idx + shift) % 12] }
+      })
+      const melody = s.melody.map(bar =>
+        bar.map(note => note ? { ...note, semitone: (note.semitone + shift) % 12 } : null)
+      )
+      const keyRoot = (s.keyRoot + shift) % 12
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody, keyRoot }
+    })
+  }, [])
+
   const clearAll = useCallback(() => {
     stop()
     setState(s => {
@@ -325,6 +344,6 @@ export function useSequencer() {
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, transpose, play, stop,
   }
 }
