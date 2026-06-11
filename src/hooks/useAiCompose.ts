@@ -1,25 +1,33 @@
 import { useState } from 'react'
 import type { ApiConfig } from '../types/compose'
-import type { ChordSlot, MelodyNote, SequencerState } from '../types/audio'
+import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
+import { getMasterSlotsPerBar } from './useSequencer'
+
+const VALID_TIMSIGS = ['4/4', '3/4', '6/8', '2/4'] as const
 
 const SYSTEM_PROMPT = `You are a guitar composition assistant. Return ONLY a valid JSON object — no markdown fences, no explanation.
 
 Schema:
 {
   "bpm": <integer 40-180>,
+  "timeSig": "4/4"|"3/4"|"6/8"|"2/4",
   "pattern": "53231323"|"x3231323"|"3_12_3"|"strum",
   "keyRoot": <integer 0-11>,
   "chords": [exactly 8 items: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
-  "melody": [exactly 8 items (one per bar): [8 eighth-note slots: {"semitone": <integer 0-11>}|null]]
+  "melody": [exactly 8 items (one per bar): array of eighth-note slots — count depends on timeSig:
+    4/4 → 8 slots per bar, 3/4 → 6 slots, 6/8 → 6 slots, 2/4 → 4 slots
+    each slot: {"semitone": <integer 0-11>}|null]
 }
 
 keyRoot: C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11
 pattern: 53231323=folk fingerpicking, x3231323=muted folk, 3_12_3=classical, strum=strumming
-null root/suffix = empty bar (silence). melody null = no melody note on that beat.
-For a simple accompaniment leave all melody beats null. Add melody notes for a melodic lead.`
+timeSig: choose to match the requested style — 6/8/3/4 for triple/waltz feel, 4/4 for most pop/folk, 2/4 for march.
+null root/suffix = empty bar (silence). melody null = no note on that beat.
+For simple accompaniment leave all melody beats null. Add melody notes for a melodic lead line.`
 
 export interface AiComposition {
   bpm: number
+  timeSig: TimeSig
   pattern: SequencerState['pattern']
   keyRoot: number
   chords: ChordSlot[]
@@ -63,7 +71,7 @@ async function callAnthropic(prompt: string, config: ApiConfig): Promise<string>
     },
     body: JSON.stringify({
       model: config.model,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -77,11 +85,11 @@ async function callAnthropic(prompt: string, config: ApiConfig): Promise<string>
 }
 
 function parseComposition(raw: string): AiComposition {
-  // Strip any accidental markdown fences
   const json = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
   const obj = JSON.parse(json)
 
   const bpm     = Math.max(40, Math.min(200, Number(obj.bpm) || 80))
+  const timeSig: TimeSig = VALID_TIMSIGS.includes(obj.timeSig) ? obj.timeSig as TimeSig : '4/4'
   const pattern = (['53231323','x3231323','3_12_3','strum'] as const).includes(obj.pattern)
     ? obj.pattern as SequencerState['pattern']
     : '53231323'
@@ -96,12 +104,15 @@ function parseComposition(raw: string): AiComposition {
     : []
   while (chords.length < 8) chords.push({ root: null, suffix: null, positionIndex: 0 })
 
-  // AI returns up to 8 eighth-note slots; map each slot k → master slot k*2
+  // AI returns N eighth-note slots per bar (N = masterSlotsPerBar / 2)
+  // We always store 16 slots per bar in the sequencer; map slot i → master[i*2]
+  const slotsPerBar = getMasterSlotsPerBar(timeSig) / 2
+
   const melody: (MelodyNote | null)[][] = Array.isArray(obj.melody)
     ? obj.melody.slice(0, 8).map((bar: ({ semitone?: number } | null)[]) => {
         const master: (MelodyNote | null)[] = Array(16).fill(null)
         if (Array.isArray(bar)) {
-          bar.slice(0, 8).forEach((n: { semitone?: number } | null, i: number) => {
+          bar.slice(0, slotsPerBar).forEach((n: { semitone?: number } | null, i: number) => {
             if (n && typeof n.semitone === 'number') {
               master[i * 2] = { semitone: Math.max(0, Math.min(11, n.semitone)), duration: 2 }
             }
@@ -112,7 +123,7 @@ function parseComposition(raw: string): AiComposition {
     : []
   while (melody.length < 8) melody.push(Array(16).fill(null))
 
-  return { bpm, pattern, keyRoot, chords, melody }
+  return { bpm, timeSig, pattern, keyRoot, chords, melody }
 }
 
 export function useAiCompose() {

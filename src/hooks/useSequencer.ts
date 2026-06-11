@@ -309,11 +309,22 @@ export function useSequencer() {
     })
   }, [])
 
+  const clearAll = useCallback(() => {
+    stop()
+    setState(s => {
+      const chords = s.chords.map(() => ({ root: null, suffix: null, positionIndex: 0 }))
+      const melody = s.melody.map(() => Array(MASTER_SLOTS).fill(null))
+      chordsRef.current = chords as ChordSlot[]
+      melodyRef.current = melody
+      return { ...s, chords: chords as ChordSlot[], melody }
+    })
+  }, [stop])
+
   useEffect(() => () => stop(), [stop])
 
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, play, stop,
   }
 }

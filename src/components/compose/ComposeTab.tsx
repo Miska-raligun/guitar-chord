@@ -21,17 +21,17 @@ const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
 type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
-  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, addBar, removeLastBar, play, stop } = useSequencer()
+  const { state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, play, stop } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition } = useSavedCompositions()
   const [panel, setPanel] = useState<Panel>(null)
   const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
 
   function applyComposition(src: AiComposition | SavedComposition) {
-    stop()
+    clearAll()
     setBpm(src.bpm)
     setPattern(src.pattern)
     setKeyRoot(src.keyRoot)
-    if ('timeSig' in src && src.timeSig) setTimeSig(src.timeSig)
+    if (src.timeSig) setTimeSig(src.timeSig)
     if ('noteDuration' in src && src.noteDuration) setNoteDuration(src.noteDuration)
     src.chords.forEach((slot, i) => setChordSlot(i, slot))
     src.melody.forEach((bar, i) => bar.forEach((note, j) => setMelodyNote(i, j, note)))
@@ -182,6 +182,13 @@ export default function ComposeTab() {
             ? <><IconStop className="w-4 h-4" /> 停止</>
             : <><IconPlay className="w-4 h-4" /> 循环播放</>
           }
+        </button>
+        <button
+          onClick={clearAll}
+          className="px-3 py-3 rounded-xl bg-amber-100 text-stone-500 text-xs hover:bg-red-50 hover:text-red-500 border border-amber-200 transition-colors"
+          title="清空所有编曲"
+        >
+          清空
         </button>
         {state.chords.length > 1 && (
           <button
