@@ -16,7 +16,7 @@ const TABS: { id: Tab; label: string; Icon: (p: { className?: string }) => JSX.E
 
 export default function TabBar({ active, onChange }: Props) {
   return (
-    <div className="flex bg-white/80 backdrop-blur-md border-b border-amber-200/60 relative z-10">
+    <div className="flex bg-zinc-900 border-b border-zinc-800">
       {TABS.map(({ id, label, Icon }) => {
         const isActive = active === id
         return (
@@ -25,8 +25,8 @@ export default function TabBar({ active, onChange }: Props) {
             onClick={() => onChange(id)}
             className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors ${
               isActive
-                ? 'text-amber-600 border-b-2 border-amber-500'
-                : 'text-stone-400 hover:text-stone-600'
+                ? 'text-amber-400 border-b-2 border-amber-500'
+                : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
             <Icon className="w-4 h-4" />

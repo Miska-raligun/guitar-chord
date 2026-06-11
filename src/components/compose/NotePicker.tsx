@@ -14,17 +14,19 @@ interface Props {
 }
 
 export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, onClose }: Props) {
+  // Build buttons for the 7 natural scale degrees (C major scale intervals: 0,2,4,5,7,9,11)
+  // Show all 12 chromatic notes arranged in two rows: natural (7) + chromatic (5)
   const chromaticOrder = [0, 2, 4, 5, 7, 9, 11, 1, 3, 6, 8, 10]
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full bg-white border-t border-amber-200 rounded-t-2xl p-4 pb-8 shadow-xl shadow-amber-200/30"
+        className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-2xl p-4 pb-8"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-stone-400 uppercase tracking-wider">选择旋律音</span>
-          <button onClick={onClose} className="text-stone-400 text-sm hover:text-stone-600">关闭</button>
+          <span className="text-xs text-zinc-400 uppercase tracking-wider">选择旋律音</span>
+          <button onClick={onClose} className="text-zinc-500 text-sm">关闭</button>
         </div>
 
         <div className="grid grid-cols-7 gap-1.5 mb-1.5">
@@ -36,10 +38,10 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
               <button
                 key={offset}
                 onClick={() => onSelect({ semitone, duration: noteDuration })}
-                className={`py-2.5 rounded-xl text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                className={`py-2.5 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                   isSelected
-                    ? 'bg-amber-500 text-stone-50'
-                    : 'bg-amber-100 text-stone-700 hover:bg-amber-200'
+                    ? 'bg-amber-500 text-zinc-950'
+                    : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
                 }`}
               >
                 <span className="font-bold">{SOLFEGE[idx]}</span>
@@ -58,10 +60,10 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
               <button
                 key={offset}
                 onClick={() => onSelect({ semitone, duration: noteDuration })}
-                className={`py-2.5 rounded-xl text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                className={`py-2.5 rounded-lg text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                   isSelected
-                    ? 'bg-amber-500 text-stone-50'
-                    : 'bg-amber-100 text-stone-600 hover:bg-amber-200'
+                    ? 'bg-amber-500 text-zinc-950'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                 }`}
               >
                 <span className="font-bold">{SOLFEGE[idx]}</span>
@@ -73,7 +75,7 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
 
         <button
           onClick={() => onSelect(null)}
-          className="w-full py-2.5 rounded-xl bg-amber-100 text-stone-600 text-sm hover:bg-amber-200 transition-colors"
+          className="w-full py-2.5 rounded-lg bg-zinc-800 text-zinc-300 text-sm hover:bg-zinc-700 transition-colors"
         >
           清除音符
         </button>

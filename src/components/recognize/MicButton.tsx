@@ -12,8 +12,8 @@ export default function MicButton({ isListening, onStart, onStop }: Props) {
       onClick={isListening ? onStop : onStart}
       className={`flex flex-col items-center justify-center w-24 h-24 rounded-full border-2 transition-all ${
         isListening
-          ? 'border-red-400/70 bg-red-50 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.12)]'
-          : 'border-amber-400/60 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:border-amber-500/70'
+          ? 'border-red-500/60 bg-red-500/10 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+          : 'border-amber-500/50 bg-amber-500/8 text-amber-400 hover:bg-amber-500/15 hover:border-amber-500/70'
       }`}
     >
       {isListening

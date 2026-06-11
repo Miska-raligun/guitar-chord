@@ -25,7 +25,7 @@ export default function ChordDiagram({ position, activeString, strumFlash, lite 
   return (
     <div
       className={`relative inline-block rounded-lg transition-all duration-75 ${
-        strumFlash ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-amber-50' : ''
+        strumFlash ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-zinc-950' : ''
       }`}
       style={{ width: size, height: size }}
     >
