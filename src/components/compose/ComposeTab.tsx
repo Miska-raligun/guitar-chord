@@ -165,27 +165,27 @@ export default function ComposeTab() {
         </div>
       </div>
 
-      {/* ── Transpose + Tools row ── */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
-        {/* Transpose */}
-        <div className="flex items-center gap-1">
+      {/* ── Transpose + Tools rows ── */}
+      <div className="flex flex-col gap-1.5 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+        {/* Transpose — flex-wrap so it never overflows on narrow screens */}
+        <div className="flex items-center gap-1 flex-wrap">
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mr-0.5">移调</span>
           {[-5, -4, -3, -2, -1, +1, +2, +3, +4, +5].map(n => (
             <button
               key={n}
               onClick={() => transpose(n)}
               title={`移调 ${n > 0 ? '+' : ''}${n} 半音`}
-              className="w-7 h-7 flex items-center justify-center rounded text-[11px] font-mono bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+              className="w-6 h-6 flex items-center justify-center rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
             >{n > 0 ? `+${n}` : n}</button>
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
-          {/* Metronome */}
+        {/* Tools — always on its own line */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => metronome.toggle(bpm, TS_BEATS[timeSig] ?? 4)}
             title="节拍器"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
               metronome.isRunning
                 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                 : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
@@ -207,21 +207,19 @@ export default function ComposeTab() {
             )}
           </button>
 
-          {/* MIDI export */}
           <button
             onClick={handleMidi}
             title="导出 MIDI"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700"
           >
             <IconMidi className="w-3.5 h-3.5" />
             MIDI
           </button>
 
-          {/* Share */}
           <button
             onClick={handleShare}
             title="复制分享链接"
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
               shareCopied
                 ? 'bg-green-500/15 text-green-400 border border-green-500/30'
                 : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
