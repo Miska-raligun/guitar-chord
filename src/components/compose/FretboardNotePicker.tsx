@@ -26,10 +26,10 @@ const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
 const SOLFEGE = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si']
 const NUMS    = ['1',  '2',  '3',  '4',  '5',   '6',  '7']
 
-const SINGLE_DOTS = new Set([3, 5, 7, 9, 15])
-const DOUBLE_DOTS = new Set([12])
+const SINGLE_DOTS = new Set([3, 5, 7, 9, 15, 17, 19, 21])
+const DOUBLE_DOTS = new Set([12, 24])
 
-const FRET_COLS = 17  // shows frets 0–16
+const FRET_COLS = 25  // shows frets 0–24
 
 function getNoteInfo(semitone: number, keyRoot: number) {
   const interval = (semitone - keyRoot + 12) % 12
