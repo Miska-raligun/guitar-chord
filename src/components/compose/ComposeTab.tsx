@@ -274,9 +274,15 @@ export default function ComposeTab() {
         />
         {state.chords.every(c => c.root === null) && (
           <p className="text-center text-zinc-600 text-xs mt-8 px-8 leading-relaxed">
-            点击格子选择和弦<br />
-            点击下方小格添加旋律音<br />
-            或使用 AI 创作功能一键生成
+            {/* Mobile: line breaks; PC (md+): single line with dots */}
+            <span className="md:hidden">
+              点击格子选择和弦<br />
+              点击下方小格添加旋律音<br />
+              或使用 AI 创作功能一键生成
+            </span>
+            <span className="hidden md:inline">
+              点击格子选择和弦 · 点击下方小格添加旋律音 · 或使用 AI 创作功能一键生成
+            </span>
           </p>
         )}
       </div>
