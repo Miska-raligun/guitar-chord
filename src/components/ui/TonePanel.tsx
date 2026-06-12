@@ -5,6 +5,7 @@ import {
 } from '../../audio/toneConfig'
 import type { PickupConfig, PickupType, EffectType } from '../../audio/toneConfig'
 import { IconX } from './icons'
+import SynthSettingsPanel from './SynthSettingsPanel'
 
 interface Props {
   onClose: () => void
@@ -62,7 +63,7 @@ export default function TonePanel({ onClose }: Props) {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-2xl border-t border-zinc-700 px-4 pt-3 pb-6 space-y-4 tone-panel-enter max-w-lg mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 rounded-t-2xl border-t border-zinc-700 px-4 pt-3 pb-6 tone-panel-enter max-w-lg mx-auto overflow-y-auto max-h-[85vh] space-y-4 scrollbar-none">
 
         {/* Drag handle + title */}
         <div className="flex items-center justify-between">
@@ -142,6 +143,8 @@ export default function TonePanel({ onClose }: Props) {
             </div>
           </>
         )}
+
+        <SynthSettingsPanel />
       </div>
     </>
   )

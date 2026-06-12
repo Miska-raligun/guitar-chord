@@ -2,6 +2,7 @@ import audioEngine from './AudioEngine'
 import type { ChordPosition } from '../types/chord'
 import { OPEN_STRING_FREQS } from '../types/chord'
 import { getToneConfig, computeKsParams } from './toneConfig'
+import { getSynthConfig } from './synthConfig'
 
 const activeNodes = new Set<AudioBufferSourceNode>()
 
@@ -55,10 +56,13 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
   const N   = Math.max(2, Math.round(sr / freq))
   const total = Math.floor(sr * durationSec)
 
+  const synth = getSynthConfig()
+
   const delay = new Float32Array(N)
   for (let i = 0; i < N; i++) delay[i] = Math.random() * 2 - 1
   // Pre-smooth initial excitation to soften the attack transient
-  for (let i = 1; i < N; i++) delay[i] = 0.55 * delay[i] + 0.45 * delay[i - 1]
+  const es = synth.exciteSmooth
+  for (let i = 1; i < N; i++) delay[i] = (1 - es) * delay[i] + es * delay[i - 1]
 
   const out = new Float32Array(total)
   const b = loopFilterA
@@ -74,8 +78,8 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
   applyDrive(out, driveAmount)
   applyLowpass(out, lpCutoff, sr)
 
-  // Fade out the last 25% — prevents abrupt cutoff and reduces overlap buildup
-  const fadeStart = Math.floor(total * 0.75)
+  // Fade out the tail — prevents abrupt cutoff and reduces overlap buildup
+  const fadeStart = Math.floor(total * synth.fadeOutStart)
   for (let i = fadeStart; i < total; i++) {
     const t = (i - fadeStart) / (total - fadeStart)
     out[i] *= (1 - t) * (1 - t)
@@ -130,10 +134,13 @@ function fireAt(buf: AudioBuffer, time: number, volume: number): void {
 }
 
 export function pluckStringAt(freq: number, time: number, volume = 0.7): void {
-  const cfg = getToneConfig()
+  const cfg   = getToneConfig()
+  const synth = getSynthConfig()
   const dur = cfg.mode === 'electric'
-    ? (cfg.effect === 'distortion' ? 0.7 : cfg.effect === 'overdrive' ? 1.2 : 2.0)
-    : 2.2
+    ? (cfg.effect === 'distortion' ? synth.durDistortion
+       : cfg.effect === 'overdrive' ? synth.durOverdrive
+       : synth.durClean)
+    : synth.durAcoustic
   fireAt(buildKSBuffer(freq, dur), time, volume)
 }
 

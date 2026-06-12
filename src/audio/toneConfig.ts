@@ -1,5 +1,6 @@
 // Tone / pickup configuration — module-level singleton so all audio functions
 // read the same state without prop drilling.
+import { getSynthConfig } from './synthConfig'
 
 export type PickupType = 'S' | 'H' | null   // Single, Humbucker, Off/absent
 export type PickupPos  = 'B' | 'BM' | 'M' | 'MN' | 'N'
@@ -56,28 +57,32 @@ function activeTypeKey(cfg: PickupConfig): string {
   return 'SH'
 }
 
-const ACOUSTIC_PARAMS: KsToneParams = {
-  loopFilterA: 0.50,
-  decay:       0.998,
-  driveAmount: 0,
-  lpCutoff:    0,
-}
-
 export function computeKsParams(cfg: PickupConfig): KsToneParams {
-  if (cfg.mode === 'acoustic') return ACOUSTIC_PARAMS
+  const synth = getSynthConfig()
+
+  if (cfg.mode === 'acoustic') return {
+    loopFilterA: synth.acousticLoopA,
+    decay:       synth.acousticDecay,
+    driveAmount: 0,
+    lpCutoff:    0,
+  }
 
   const key = `${cfg.position}_${activeTypeKey(cfg)}`
   const base = TONE_TABLE[key] ?? { loopA: 0.60, decay: 0.997, lpClean: 0 }
 
-  const driveAmount = cfg.effect === 'clean' ? 0 : cfg.effect === 'overdrive' ? 0.35 : 0.75
-  const decayBoost  = cfg.effect === 'clean' ? 0 : cfg.effect === 'overdrive' ? 0.001 : 0.0015
-  const lpCutoff    = cfg.effect === 'overdrive' ? 6000
-                    : cfg.effect === 'distortion' ? 4000
+  const driveAmount = cfg.effect === 'clean' ? 0
+                    : cfg.effect === 'overdrive' ? synth.overdriveDrive
+                    : synth.distortionDrive
+  const decayBoost  = cfg.effect === 'clean' ? 0
+                    : cfg.effect === 'overdrive' ? 0.001
+                    : 0.0015
+  const lpCutoff    = cfg.effect === 'overdrive' ? synth.overdriveLp
+                    : cfg.effect === 'distortion' ? synth.distortionLp
                     : base.lpClean
 
   return {
-    loopFilterA: base.loopA,
-    decay:       Math.min(0.9998, base.decay + decayBoost),
+    loopFilterA: Math.min(0.99, Math.max(0.01, base.loopA + synth.elecBrightness)),
+    decay:       Math.min(0.9998, base.decay + decayBoost + synth.elecDecayOffset),
     driveAmount,
     lpCutoff,
   }
