@@ -1,23 +1,50 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Header from './components/layout/Header'
 import TabBar, { type Tab } from './components/layout/TabBar'
 import RecognizeTab from './components/recognize/RecognizeTab'
 import BrowseTab from './components/browse/BrowseTab'
 import FretboardTab from './components/fretboard/FretboardTab'
 import ComposeTab from './components/compose/ComposeTab'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('browse')
+  const [tab,      setTab]      = useState<Tab>('browse')
+  const [enterTab, setEnterTab] = useState<Tab | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function changeTab(next: Tab) {
+    if (next === tab) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setTab(next)
+    setEnterTab(next)
+    // Remove animation class after it finishes so it can replay on re-visit
+    timerRef.current = setTimeout(() => setEnterTab(null), 300)
+  }
+
+  function cls(t: Tab, extra = '') {
+    const visible = tab === t
+    const anim    = enterTab === t ? 'tab-enter' : ''
+    return `${visible ? extra : 'hidden'} ${anim}`.trim()
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="h-screen overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col">
       <Header />
-      <TabBar active={tab} onChange={setTab} />
-      <main className="flex-1 overflow-y-auto">
-        {tab === 'recognize' ? <RecognizeTab />
-          : tab === 'browse' ? <BrowseTab />
-          : tab === 'fretboard' ? <FretboardTab />
-          : <ComposeTab />}
+      <TabBar active={tab} onChange={changeTab} />
+      <main className="flex-1 overflow-y-auto scrollbar-none">
+        <div className={cls('recognize')}>
+          <ErrorBoundary label="识别"><RecognizeTab /></ErrorBoundary>
+        </div>
+        <div className={cls('browse')}>
+          <ErrorBoundary label="和弦"><BrowseTab /></ErrorBoundary>
+        </div>
+        <div className={cls('fretboard')}>
+          <ErrorBoundary label="指板"><FretboardTab /></ErrorBoundary>
+        </div>
+        {/* ComposeTab uses h-full for sticky bottom bar */}
+        <div className={cls('compose', 'h-full')}>
+          <ErrorBoundary label="编曲台"><ComposeTab /></ErrorBoundary>
+        </div>
       </main>
     </div>
   )

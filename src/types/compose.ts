@@ -1,4 +1,4 @@
-import type { ChordSlot, MelodyNote } from './audio'
+import type { ChordSlot, MelodyNote, TimeSig } from './audio'
 
 export interface ApiConfig {
   provider: 'openai' | 'anthropic'
@@ -14,6 +14,8 @@ export interface SavedComposition {
   bpm: number
   pattern: '53231323' | 'x3231323' | '3_12_3' | 'strum'
   keyRoot: number
+  timeSig?: TimeSig
+  noteDuration?: 1 | 2 | 4 | 8 | 16
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
 }

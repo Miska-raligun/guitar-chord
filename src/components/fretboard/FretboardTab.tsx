@@ -283,14 +283,14 @@ export default function FretboardTab() {
       {/* ── 横向布局 ── */}
       {isHorizontal && (
         <div className="rounded-xl overflow-hidden border border-zinc-700">
-          <div className="overflow-x-auto">
-            <div className="inline-flex flex-col">
+          <div className="overflow-x-auto scrollbar-none">
+            <div className="flex flex-col w-full" style={{ minWidth: 'max-content' }}>
 
               {/* 品格编号行 */}
               <div className="flex border-b-[3px] border-zinc-400 bg-zinc-900">
                 <div className="sticky left-0 z-10 w-10 flex-shrink-0 bg-zinc-900 border-r border-zinc-700" />
                 {Array.from({ length: 25 }, (_, f) => (
-                  <div key={f} className="w-10 flex-shrink-0 h-7 flex flex-col items-center justify-center gap-[1px]">
+                  <div key={f} className="flex-1 min-w-[2.5rem] h-7 flex flex-col items-center justify-center gap-[1px]">
                     <span className="text-[9px] text-zinc-500 leading-none">{f === 0 ? '空' : f}</span>
                     {DOUBLE_DOTS.has(f) && <span className="text-[5px] text-amber-400/70 leading-none">●●</span>}
                     {SINGLE_DOTS.has(f) && <span className="text-[5px] text-zinc-600 leading-none">●</span>}
@@ -318,7 +318,7 @@ export default function FretboardTab() {
                       scaleIntervals={scaleIntervals}
                       activeCell={activeCell}
                       onPlay={playNote}
-                      className="w-10 h-11 flex-shrink-0"
+                      className="flex-1 min-w-[2.5rem] h-11"
                     />
                   ))}
                 </div>
