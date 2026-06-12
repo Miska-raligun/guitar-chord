@@ -4,6 +4,30 @@ import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/au
 import type { GuitarMode, EffectType } from '../audio/toneConfig'
 import { getMasterSlotsPerBar } from './useSequencer'
 
+const ROOT_NAMES_AI = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B']
+
+export interface ContinueFromState {
+  chords: ChordSlot[]
+  bpm: number
+  timeSig: TimeSig
+  pattern: SequencerState['pattern']
+  keyRoot: number
+}
+
+function buildContinuationPrefix(ctx: ContinueFromState, targetBars: number | undefined): string {
+  const chordNames = ctx.chords
+    .map(c => c.root
+      ? c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '') + ((c.bars ?? 1) > 1 ? `×${c.bars}` : '')
+      : '─')
+    .join(' ')
+  const bars = targetBars ?? 8
+  const key = ROOT_NAMES_AI[ctx.keyRoot]
+  return `[CONTINUATION MODE — append ${bars} new bars to the existing composition below. ` +
+    `Return ONLY the new bars (bars=${bars}). Key: ${key}, BPM: ${ctx.bpm}, timeSig: ${ctx.timeSig}. ` +
+    `Existing chord progression (${ctx.chords.length} bars): ${chordNames || 'empty'}. ` +
+    `Continue with consistent style. The user request follows:] `
+}
+
 const VALID_TIMSIGS = ['4/4', '3/4', '6/8', '2/4'] as const
 
 const SYSTEM_PROMPT = `You are a guitar composition assistant. Return ONLY a valid JSON object — no markdown fences, no explanation.
@@ -155,22 +179,22 @@ export function useAiCompose() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
-  async function generate(prompt: string, config: ApiConfig, targetBars?: number): Promise<AiComposition | null> {
+  async function generate(prompt: string, config: ApiConfig, targetBars?: number, continueFrom?: ContinueFromState): Promise<AiComposition | null> {
     if (!config.apiKey.trim()) {
       setError('请先配置 API Key')
       return null
     }
     setIsLoading(true)
     setError(null)
-    // Prepend bar count requirement so the model knows exactly how many items to produce
-    const userMsg = targetBars
-      ? `[要求恰好 ${targetBars} 小节，bars=${targetBars}，chords 和 melody 各有 ${targetBars} 项] ${prompt}`
-      : prompt
+    const bars = targetBars ?? (continueFrom ? 8 : undefined)
+    const barPrefix = bars ? `[要求恰好 ${bars} 小节，bars=${bars}，chords 和 melody 各有 ${bars} 项] ` : ''
+    const contPrefix = continueFrom ? buildContinuationPrefix(continueFrom, bars) : ''
+    const userMsg = contPrefix + barPrefix + prompt
     try {
       const raw = config.provider === 'anthropic'
         ? await callAnthropic(userMsg, config)
         : await callOpenAi(userMsg, config)
-      return parseComposition(raw, targetBars)
+      return parseComposition(raw, bars)
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败，请检查网络和配置')
       return null

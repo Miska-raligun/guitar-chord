@@ -8,7 +8,7 @@ interface Props {
 
 export default function SuffixSelector({ suffixes, selected, onChange }: Props) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none md:flex-wrap md:overflow-x-visible md:pb-0">
       {suffixes.map(suffix => (
         <button
           key={suffix}

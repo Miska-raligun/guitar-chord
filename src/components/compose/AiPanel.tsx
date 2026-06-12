@@ -17,9 +17,8 @@ const BAR_OPTIONS = [
 ]
 
 interface Props {
-  onGenerate: (result: AiComposition) => void
+  onGenerate: (result: AiComposition, append: boolean) => void
   onClose: () => void
-  // AI state owned by parent so it survives panel close / tab switch
   prompt: string
   onPromptChange: (p: string) => void
   result: AiComposition | null
@@ -27,7 +26,8 @@ interface Props {
   isLoading: boolean
   error: string | null
   onClearError: () => void
-  onTriggerGenerate: (targetBars?: number) => void
+  onTriggerGenerate: (targetBars?: number, append?: boolean) => void
+  hasExistingContent: boolean
 }
 
 export default function AiPanel({
@@ -36,9 +36,11 @@ export default function AiPanel({
   result, onResultClear,
   isLoading, error, onClearError,
   onTriggerGenerate,
+  hasExistingContent,
 }: Props) {
   const [showConfig, setShowConfig] = useState(false)
-  const [barTarget, setBarTarget]   = useState(0)   // 0 = auto
+  const [barTarget, setBarTarget]   = useState(0)
+  const [aiAppend,  setAiAppend]    = useState(false)
 
   if (showConfig) return <ApiConfigModal onClose={() => setShowConfig(false)} />
 
@@ -56,6 +58,9 @@ export default function AiPanel({
             <div className="flex items-center gap-2">
               <IconWand className="w-4 h-4 text-amber-400" />
               <span className="text-sm font-semibold text-zinc-100">AI 创作</span>
+              {aiAppend && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30">续写</span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {!result && !isLoading && (
@@ -88,6 +93,7 @@ export default function AiPanel({
                     (result.tone.mode === 'acoustic' ? '木吉他' : '电吉他') + '·' +
                     (result.tone.effect === 'clean' ? '清音' : result.tone.effect === 'overdrive' ? '过载' : '失真'),
                   ] : []),
+                  ...(aiAppend ? ['续写模式'] : []),
                 ].map(tag => (
                   <span key={tag} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-medium">
                     {tag}
@@ -95,7 +101,7 @@ export default function AiPanel({
                 ))}
               </div>
 
-              {/* Chord grid — 4 cols, no height cap, scrolls with the panel */}
+              {/* Chord grid */}
               <div className="grid grid-cols-4 gap-1.5 mb-4">
                 {result.chords.map((slot, i) => (
                   <div
@@ -128,20 +134,47 @@ export default function AiPanel({
                   重新生成
                 </button>
                 <button
-                  onClick={() => { onGenerate(result); onResultClear() }}
+                  onClick={() => { onGenerate(result, aiAppend); onResultClear() }}
                   className="flex-1 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400"
                 >
-                  ✓ 应用到编曲
+                  ✓ {aiAppend ? '追加到编曲' : '应用到编曲'}
                 </button>
               </div>
             </div>
           ) : (
             /* ── Input / Loading ── */
             <div>
+              {/* Continuation toggle */}
+              {hasExistingContent && (
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs text-zinc-500">模式</span>
+                  <div className="flex rounded-lg overflow-hidden border border-zinc-700">
+                    <button
+                      onClick={() => setAiAppend(false)}
+                      className={`px-3 py-1.5 text-xs transition-colors ${
+                        !aiAppend ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      }`}
+                    >
+                      新建编曲
+                    </button>
+                    <button
+                      onClick={() => setAiAppend(true)}
+                      className={`px-3 py-1.5 text-xs transition-colors ${
+                        aiAppend ? 'bg-blue-500 text-white font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      }`}
+                    >
+                      续写当前
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <textarea
                 value={prompt}
                 onChange={e => { onPromptChange(e.target.value); onClearError() }}
-                placeholder="描述你想要的风格，例如：C 大调舒缓民谣，BPM 70，带旋律...&#10;也可指定拍号：6/8 拍圆舞曲、3/4 拍爵士..."
+                placeholder={aiAppend
+                  ? '描述续写要求，例如：加入副歌部分，更有力度，BPM 保持不变...'
+                  : '描述你想要的风格，例如：C 大调舒缓民谣，BPM 70，带旋律...&#10;也可指定拍号：6/8 拍圆舞曲、3/4 拍爵士...'}
                 rows={3}
                 disabled={isLoading}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 resize-none mb-3 placeholder:text-zinc-600 disabled:opacity-50"
@@ -149,7 +182,7 @@ export default function AiPanel({
 
               {/* Bar count selector */}
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-zinc-500 shrink-0">小节数</span>
+                <span className="text-xs text-zinc-500 shrink-0">{aiAppend ? '续写小节' : '小节数'}</span>
                 <div className="flex rounded-lg overflow-hidden border border-zinc-700">
                   {BAR_OPTIONS.map(o => (
                     <button
@@ -174,16 +207,18 @@ export default function AiPanel({
               )}
 
               <button
-                onClick={() => onTriggerGenerate(barTarget > 0 ? barTarget : undefined)}
+                onClick={() => onTriggerGenerate(barTarget > 0 ? barTarget : undefined, aiAppend)}
                 disabled={isLoading || !prompt.trim()}
                 className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
                   isLoading || !prompt.trim()
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                    : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
+                    : aiAppend
+                      ? 'bg-blue-500 text-white hover:bg-blue-400'
+                      : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
                 }`}
               >
                 <IconWand className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                {isLoading ? '生成中，请稍候...' : '生成编曲'}
+                {isLoading ? '生成中，请稍候...' : aiAppend ? '续写编曲' : '生成编曲'}
               </button>
             </div>
           )}

@@ -14,7 +14,7 @@ import {
   IconPlay, IconStop, IconWand, IconSave, IconLibrary,
   IconShare, IconMetronome, IconMidi,
 } from '../ui/icons'
-import type { AiComposition } from '../../hooks/useAiCompose'
+import type { AiComposition, ContinueFromState } from '../../hooks/useAiCompose'
 import type { SavedComposition } from '../../types/compose'
 import type { SequencerState } from '../../types/audio'
 import { ROOTS } from '../../utils/dbUtils'
@@ -63,21 +63,40 @@ export default function ComposeTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function applyComposition(src: AiComposition | SavedComposition) {
-    loadComposition(src.chords, src.melody, {
-      bpm:          src.bpm,
-      pattern:      src.pattern,
-      keyRoot:      src.keyRoot,
-      timeSig:      src.timeSig,
-      noteDuration: 'noteDuration' in src ? src.noteDuration : undefined,
-    })
-    if ('tone' in src && src.tone) setToneConfig(src.tone)
+  function applyComposition(src: AiComposition | SavedComposition, append = false) {
+    if (append) {
+      const newChords = [...state.chords, ...src.chords]
+      const newMelody = [...state.melody, ...src.melody]
+      loadComposition(newChords, newMelody, {
+        bpm:     src.bpm,
+        pattern: src.pattern,
+        keyRoot: src.keyRoot,
+        timeSig: src.timeSig,
+      })
+      if ('tone' in src && src.tone) setToneConfig(src.tone)
+    } else {
+      loadComposition(src.chords, src.melody, {
+        bpm:          src.bpm,
+        pattern:      src.pattern,
+        keyRoot:      src.keyRoot,
+        timeSig:      src.timeSig,
+        noteDuration: 'noteDuration' in src ? src.noteDuration : undefined,
+      })
+      if ('tone' in src && src.tone) setToneConfig(src.tone)
+    }
   }
 
-  async function handleAiGenerate(targetBars?: number) {
+  async function handleAiGenerate(targetBars?: number, append = false) {
     if (!aiPrompt.trim() || aiLoading) return
     const config = loadApiConfig()
-    const r = await generate(aiPrompt, config, targetBars)
+    const continueFrom: ContinueFromState | undefined = append ? {
+      chords:  state.chords,
+      bpm:     state.bpm,
+      timeSig: state.timeSig,
+      pattern: state.pattern,
+      keyRoot: state.keyRoot,
+    } : undefined
+    const r = await generate(aiPrompt, config, targetBars, continueFrom)
     if (r) setAiResult(r)
   }
 
@@ -305,7 +324,7 @@ export default function ComposeTab() {
           className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-500 text-xs hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 transition-colors"
           title="清空所有编曲"
         >清空</button>
-        {state.chords.length > 1 && (
+        {state.melody.length > 1 && (
           <button
             onClick={removeLastBar}
             className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-500 text-xs hover:bg-zinc-700 hover:text-zinc-300 border border-zinc-700"
@@ -317,7 +336,7 @@ export default function ComposeTab() {
       {/* ── Panels ── */}
       {panel === 'ai' && (
         <AiPanel
-          onGenerate={result => { applyComposition(result); setAiResult(null); setPanel(null) }}
+          onGenerate={(result, append) => { applyComposition(result, append); setAiResult(null); setPanel(null) }}
           onClose={() => setPanel(null)}
           prompt={aiPrompt}
           onPromptChange={setAiPrompt}
@@ -327,6 +346,7 @@ export default function ComposeTab() {
           error={aiError}
           onClearError={clearAiError}
           onTriggerGenerate={handleAiGenerate}
+          hasExistingContent={state.chords.some(c => c.root !== null)}
         />
       )}
       {panel === 'save' && (

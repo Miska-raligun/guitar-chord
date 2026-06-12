@@ -41,11 +41,14 @@ export interface ChordSlot {
   root: string | null       // null = 空小节
   suffix: string | null
   positionIndex: number
+  bars?: number             // how many physical bars this slot spans (default 1)
 }
 
 export interface MelodyNote {
   semitone: number          // 0-11，绝对半音（C=0）
   duration: number          // 时值，单位：主网格槽（十六分=1, 八分=2, 四分=4, 半=8, 全=16）
+  string?: number           // 0=低音E弦…5=高音e弦；仅当从指板选音时设置
+  fret?: number             // 品位（0=空弦）
 }
 
 export interface SequencerState {

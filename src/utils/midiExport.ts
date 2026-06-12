@@ -88,8 +88,15 @@ export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): v
   // ── note events ─────────────────────────────────────────────────────────
   const events: NoteEvent[] = []
 
+  // Expand chord slots into physical bars
+  const physChords: ChordSlot[] = []
+  chords.forEach(slot => {
+    const bars = slot.bars ?? 1
+    for (let b = 0; b < bars; b++) physChords.push(slot)
+  })
+
   // Chord track (channel 0): voiced arpeggio, held for the whole bar
-  chords.forEach((slot, bar) => {
+  physChords.forEach((slot, bar) => {
     if (!slot.root || !slot.suffix) return
     const root      = ROOT_SEMITONE[slot.root] ?? 0
     const intervals = CHORD_INTERVALS[slot.suffix] ?? CHORD_INTERVALS.major

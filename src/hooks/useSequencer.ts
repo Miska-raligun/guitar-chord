@@ -47,6 +47,22 @@ export function getMasterSlotsPerBar(timeSig: TimeSig): number {
   return 8  // 2/4
 }
 
+// Total physical bars = sum of chord slot spans
+export function getTotalPhysicalBars(chords: ChordSlot[]): number {
+  return chords.reduce((sum, c) => sum + (c.bars ?? 1), 0)
+}
+
+// Map a physical bar index to its chord slot
+export function getChordForPhysicalBar(chords: ChordSlot[], physicalBar: number): ChordSlot {
+  let rem = physicalBar
+  for (const slot of chords) {
+    const b = slot.bars ?? 1
+    if (rem < b) return slot
+    rem -= b
+  }
+  return chords[chords.length - 1] ?? { root: null, suffix: null, positionIndex: 0 }
+}
+
 // 主步长始终是十六分音符时长
 function getMasterSPerStep(bpm: number): number {
   return 60 / bpm / 4
@@ -166,7 +182,7 @@ export function useSequencer() {
     const master     = getMasterSlotsPerBar(timeSig)    // 十六分槽数/节
     const sPerMaster = getMasterSPerStep(bpm)           // 始终是十六分音符时长
     const arpEvery   = master / spb                     // 每隔几个主步触发一次拨弦
-    const numBars    = chordsRef.current.length
+    const numBars    = getTotalPhysicalBars(chordsRef.current)
     const total      = numBars * master
 
     while (nextTimeRef.current < ctx.currentTime + 0.1) {
@@ -176,7 +192,7 @@ export function useSequencer() {
 
       // 小节切换
       if (masterInBar === 0) {
-        const slot = chordsRef.current[bar]
+        const slot = getChordForPhysicalBar(chordsRef.current, bar)
         posRef.current = (slot.root && slot.suffix)
           ? (getChordEntry(slot.root, slot.suffix)?.positions[slot.positionIndex] ?? null)
           : null
@@ -232,11 +248,34 @@ export function useSequencer() {
     intervalRef.current = setInterval(schedulerTick, 25)
   }, [schedulerTick])
 
-  const setChordSlot = useCallback((bar: number, slot: ChordSlot) => {
+  const setChordSlot = useCallback((chordIdx: number, slot: ChordSlot) => {
     setState(s => {
-      const chords = s.chords.map((c, i) => i === bar ? slot : c)
+      const oldSlot = s.chords[chordIdx]
+      if (!oldSlot) return s
+      const oldBars = oldSlot.bars ?? 1
+      const newBars = slot.bars ?? 1
+      const chords = s.chords.map((c, i) => i === chordIdx ? slot : c)
+
+      if (oldBars === newBars) {
+        chordsRef.current = chords
+        return { ...s, chords }
+      }
+
+      // Compute start position of this chord in physical bars
+      let physStart = 0
+      for (let i = 0; i < chordIdx; i++) physStart += s.chords[i].bars ?? 1
+
+      const melody = [...s.melody]
+      if (newBars > oldBars) {
+        const ins = Array.from({ length: newBars - oldBars }, (): (MelodyNote | null)[] => Array(MASTER_SLOTS).fill(null))
+        melody.splice(physStart + oldBars, 0, ...ins)
+      } else {
+        melody.splice(physStart + newBars, oldBars - newBars)
+      }
+
       chordsRef.current = chords
-      return { ...s, chords }
+      melodyRef.current = melody
+      return { ...s, chords, melody }
     })
   }, [])
 
@@ -289,7 +328,7 @@ export function useSequencer() {
 
   const addBar = useCallback(() => {
     setState(s => {
-      if (s.chords.length >= MAX_BARS) return s
+      if (getTotalPhysicalBars(s.chords) >= MAX_BARS) return s
       const chords = [...s.chords, { root: null, suffix: null, positionIndex: 0 }]
       const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
       chordsRef.current = chords
@@ -300,9 +339,18 @@ export function useSequencer() {
 
   const removeLastBar = useCallback(() => {
     setState(s => {
-      if (s.chords.length <= 1) return s
-      const chords = s.chords.slice(0, -1)
+      if (s.melody.length <= 1) return s
+      const lastChord = s.chords[s.chords.length - 1]
+      const lastBars = lastChord?.bars ?? 1
       const melody = s.melody.slice(0, -1)
+      let chords: ChordSlot[]
+      if (lastBars > 1) {
+        chords = s.chords.map((c, i) =>
+          i === s.chords.length - 1 ? { ...c, bars: lastBars - 1 } : c
+        )
+      } else {
+        chords = s.chords.slice(0, -1)
+      }
       chordsRef.current = chords
       melodyRef.current = melody
       return { ...s, chords, melody }
@@ -330,13 +378,11 @@ export function useSequencer() {
 
   const clearAll = useCallback(() => {
     stop()
-    setState(s => {
-      const chords = s.chords.map(() => ({ root: null, suffix: null, positionIndex: 0 }))
-      const melody = s.melody.map(() => Array(MASTER_SLOTS).fill(null))
-      chordsRef.current = chords as ChordSlot[]
-      melodyRef.current = melody
-      return { ...s, chords: chords as ChordSlot[], melody }
-    })
+    const chords = makeEmptyChords()
+    const melody = makeEmptyMelody()
+    chordsRef.current = chords
+    melodyRef.current = melody
+    setState(s => ({ ...s, chords, melody }))
   }, [stop])
 
   const resetBars = useCallback((numBars: number) => {
@@ -364,7 +410,10 @@ export function useSequencer() {
   ) => {
     stop()
     const newChords = [...chords]
+    const totalPhys = getTotalPhysicalBars(newChords)
     const newMelody = [...melody]
+    while (newMelody.length < totalPhys) newMelody.push(Array(MASTER_SLOTS).fill(null))
+    if (newMelody.length > totalPhys) newMelody.length = totalPhys
     chordsRef.current = newChords
     melodyRef.current = newMelody
     if (opts.bpm      !== undefined) bpmRef.current     = opts.bpm

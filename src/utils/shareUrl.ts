@@ -17,10 +17,10 @@ const SUFFIXES = [
 
 // ── compact types ────────────────────────────────────────────────────────────
 
-// Chord: null (empty bar) | [root_idx 0-11, suffix_idx 0-N]
-type CChord = [number, number] | null
-// Melody note: [bar, masterSlot, semitone, duration] — sparse, only non-null entries
-type CNote  = [number, number, number, number]
+// Chord: null (empty 1-bar) | [root_idx, suffix_idx] (1-bar) | [root_idx, suffix_idx, bars] | [-1,-1,bars] (empty multi-bar)
+type CChord = [number, number] | [number, number, number] | null
+// Melody note: [bar, masterSlot, semitone, duration] or [bar, masterSlot, semitone, duration, string, fret]
+type CNote  = [number, number, number, number] | [number, number, number, number, number, number]
 
 interface Compact {
   b: number   // bpm
@@ -65,11 +65,12 @@ export function encodeShareUrl(state: SharePayload): string {
     t: Math.max(0, TIMESIGS.indexOf(state.timeSig as typeof TIMESIGS[number])),
     d: state.noteDuration,
     c: state.chords.map(slot => {
-      if (!slot.root || !slot.suffix) return null
+      const bars = slot.bars ?? 1
+      if (!slot.root || !slot.suffix) return bars > 1 ? [-1, -1, bars] as [number, number, number] : null
       const r = ROOTS.indexOf(slot.root as typeof ROOTS[number])
       const s = SUFFIXES.indexOf(slot.suffix as typeof SUFFIXES[number])
-      if (r === -1 || s === -1) return null
-      return [r, s]
+      if (r === -1 || s === -1) return bars > 1 ? [-1, -1, bars] as [number, number, number] : null
+      return bars > 1 ? [r, s, bars] as [number, number, number] : [r, s] as [number, number]
     }),
     m: [],
   }
@@ -77,7 +78,12 @@ export function encodeShareUrl(state: SharePayload): string {
   // Sparse melody: only store non-null notes
   state.melody.forEach((bar, barIdx) => {
     bar.forEach((note, slot) => {
-      if (note) compact.m.push([barIdx, slot, note.semitone, note.duration])
+      if (!note) return
+      if (note.string !== undefined && note.fret !== undefined) {
+        compact.m.push([barIdx, slot, note.semitone, note.duration, note.string, note.fret])
+      } else {
+        compact.m.push([barIdx, slot, note.semitone, note.duration])
+      }
     })
   })
 
@@ -96,13 +102,23 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
     // Detect compact format (has numeric `p` field) vs old verbose format
     if (typeof obj.p === 'number') {
       // ── compact format ──
-      const numBars = Array.isArray(obj.c) ? obj.c.length : 8
-      const melody: SharePayload['melody'] = Array.from({ length: numBars }, () =>
+      const rawChords: CChord[] = Array.isArray(obj.c) ? obj.c : []
+      const totalPhysBars = rawChords.reduce((sum, ch) => {
+        if (!ch) return sum + 1
+        return sum + (ch.length >= 3 ? ch[2] : 1)
+      }, 0) || 8
+      const melody: SharePayload['melody'] = Array.from({ length: totalPhysBars }, () =>
         Array(16).fill(null)
       )
       if (Array.isArray(obj.m)) {
-        for (const [bar, slot, semi, dur] of obj.m as CNote[]) {
-          if (melody[bar]) melody[bar][slot] = { semitone: semi, duration: dur }
+        for (const entry of obj.m as CNote[]) {
+          const [bar, slot, semi, dur] = entry
+          if (!melody[bar]) continue
+          if (entry.length >= 6) {
+            melody[bar][slot] = { semitone: semi, duration: dur, string: entry[4], fret: entry[5] }
+          } else {
+            melody[bar][slot] = { semitone: semi, duration: dur }
+          }
         }
       }
       return {
@@ -111,13 +127,12 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
         keyRoot:      typeof obj.k === 'number' ? obj.k : 0,
         timeSig:      TIMESIGS[obj.t] ?? '4/4',
         noteDuration: obj.d ?? 2,
-        chords: Array.isArray(obj.c)
-          ? (obj.c as CChord[]).map(ch =>
-              ch
-                ? { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0 }
-                : { root: null, suffix: null, positionIndex: 0 }
-            )
-          : [],
+        chords: rawChords.map(ch => {
+          if (!ch) return { root: null, suffix: null, positionIndex: 0 }
+          const bars = ch.length >= 3 ? ch[2] : 1
+          if (ch[0] === -1) return { root: null, suffix: null, positionIndex: 0, ...(bars > 1 ? { bars } : {}) }
+          return { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0, ...(bars > 1 ? { bars } : {}) }
+        }),
         melody,
       }
     }
