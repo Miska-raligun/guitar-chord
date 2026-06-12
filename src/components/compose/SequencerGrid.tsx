@@ -98,7 +98,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
 
               {/* Chord cell */}
               <button
-                onClick={() => setChordPicker({ chordIdx, slot, isStrum })}
+                onClick={() => { setNotePicker(null); setChordPicker({ chordIdx, slot, isStrum }) }}
                 className={`w-full h-14 rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
                   isActive
                     ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
@@ -136,7 +136,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
                     <button
                       key={idx}
                       style={{ flex, minWidth: 0 }}
-                      onClick={() => setNotePicker({ bar: chordIdx, masterSlot, note })}
+                      onClick={() => { setChordPicker(null); setNotePicker({ bar: chordIdx, masterSlot, note }) }}
                       className={`h-10 rounded text-[9px] font-bold transition-colors flex flex-col items-center justify-center overflow-hidden gap-px ${
                         note
                           ? 'bg-amber-500/80 text-zinc-950'
@@ -170,10 +170,10 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           </div>
         )}
 
-        {/* Spacer so grid can scroll above the open picker panel */}
-        {(chordPicker || notePicker) && (
-          <div className="col-span-4 h-56" />
-        )}
+        {/* Spacer so grid can scroll above the open picker panel.
+            Note picker in fretboard mode can be ~80vh tall, so give generous room. */}
+        {chordPicker && <div className="col-span-4 h-52" />}
+        {notePicker  && <div className="col-span-4 h-[78vh]" />}
       </div>
 
       {chordPicker && (
