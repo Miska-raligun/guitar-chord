@@ -169,10 +169,16 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
             </button>
           </div>
         )}
+
+        {/* Spacer so grid can scroll above the open picker panel */}
+        {(chordPicker || notePicker) && (
+          <div className="col-span-4 h-56" />
+        )}
       </div>
 
       {chordPicker && (
         <ChordCellPicker
+          key={chordPicker.chordIdx}
           slot={chordPicker.slot}
           isStrum={chordPicker.isStrum}
           onSelect={slot => onChordChange(chordPicker.chordIdx, slot)}
@@ -184,10 +190,10 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
         <NotePicker
           keyRoot={keyRoot}
           noteDuration={noteDuration}
-          selected={notePicker.note}
+          selected={melody[notePicker.bar]?.[notePicker.masterSlot] ?? null}
           onSelect={note => {
             onMelodyChange(notePicker.bar, notePicker.masterSlot, note)
-            setNotePicker(null)
+            // Keep picker open — user closes it explicitly
           }}
           onClose={() => setNotePicker(null)}
         />

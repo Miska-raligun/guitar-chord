@@ -19,11 +19,7 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
   const chromaticOrder = [0, 2, 4, 5, 7, 9, 11, 1, 3, 6, 8, 10]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
-      <div
-        className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-2xl p-4 pb-8 max-h-[90vh] overflow-y-auto scrollbar-none"
-        onClick={e => e.stopPropagation()}
-      >
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-700 rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none p-4 pb-8">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-zinc-400 uppercase tracking-wider">选择旋律音</span>
@@ -110,7 +106,6 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
         >
           清除音符
         </button>
-      </div>
     </div>
   )
 }
