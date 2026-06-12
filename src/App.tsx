@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Header from './components/layout/Header'
 import TabBar, { type Tab } from './components/layout/TabBar'
 import RecognizeTab from './components/recognize/RecognizeTab'
@@ -8,13 +8,25 @@ import ComposeTab from './components/compose/ComposeTab'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('browse')
+  const [tab,    setTab]    = useState<Tab>('browse')
+  const [fading, setFading] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function changeTab(next: Tab) {
+    if (next === tab) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setFading(true)
+    timerRef.current = setTimeout(() => {
+      setTab(next)
+      setFading(false)
+    }, 150)
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <Header />
-      <TabBar active={tab} onChange={setTab} />
-      <main className="flex-1 overflow-y-auto">
+      <TabBar active={tab} onChange={changeTab} />
+      <main className={`flex-1 overflow-y-auto transition-opacity duration-150 ${fading ? 'opacity-0' : 'opacity-100'}`}>
         <div className={tab === 'recognize' ? '' : 'hidden'}>
           <ErrorBoundary label="识别"><RecognizeTab /></ErrorBoundary>
         </div>
