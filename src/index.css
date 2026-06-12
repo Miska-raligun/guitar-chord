@@ -44,3 +44,12 @@
 .tab-enter {
   animation: tabEnter 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
+
+/* Tone panel slide-up from bottom */
+@keyframes panelEnter {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.tone-panel-enter {
+  animation: panelEnter 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
