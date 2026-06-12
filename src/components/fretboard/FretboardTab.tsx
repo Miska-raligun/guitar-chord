@@ -283,7 +283,7 @@ export default function FretboardTab() {
       {/* ── 横向布局 ── */}
       {isHorizontal && (
         <div className="rounded-xl overflow-hidden border border-zinc-700">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scrollbar-none">
             <div className="flex flex-col w-full" style={{ minWidth: 'max-content' }}>
 
               {/* 品格编号行 */}

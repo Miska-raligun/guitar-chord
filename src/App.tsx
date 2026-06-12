@@ -31,7 +31,7 @@ export default function App() {
     <div className="h-screen overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col">
       <Header />
       <TabBar active={tab} onChange={changeTab} />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto scrollbar-none">
         <div className={cls('recognize')}>
           <ErrorBoundary label="识别"><RecognizeTab /></ErrorBoundary>
         </div>

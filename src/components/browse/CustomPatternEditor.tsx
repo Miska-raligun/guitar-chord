@@ -73,7 +73,7 @@ export default function CustomPatternEditor({ steps, timeSig, onStepsChange, onT
       </div>
 
       {/* 步骤序列 */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-1">
         {steps.map((kind, i) => (
           <div key={i} className="relative flex-shrink-0">
             <button

@@ -265,7 +265,7 @@ export default function ComposeTab() {
       </div>
 
       {/* ── Sequencer grid ── */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="flex-1 overflow-y-auto scrollbar-none py-4">
         <SequencerGrid
           state={state}
           onChordChange={setChordSlot}

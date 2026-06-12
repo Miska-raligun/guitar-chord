@@ -116,7 +116,7 @@ export default function SavedList({ list, onLoad, onDelete, onExport, onImport, 
             <span className="text-xs mt-1 block">可点击「导入」从文件加载</span>
           </p>
         ) : (
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(70vh - 52px)' }}>
+          <div className="overflow-y-auto scrollbar-none" style={{ maxHeight: 'calc(70vh - 52px)' }}>
             {list.map(item => (
               <div
                 key={item.id}
