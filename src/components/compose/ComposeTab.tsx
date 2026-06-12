@@ -165,9 +165,11 @@ export default function ComposeTab() {
         </div>
       </div>
 
-      {/* ── Transpose + Tools rows ── */}
-      <div className="flex flex-col gap-1.5 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
-        {/* Transpose — flex-wrap so it never overflows on narrow screens */}
+      {/* ── Transpose + Tools ──
+           Mobile: two stacked rows
+           PC (md+): single row, tools pushed to the right            */}
+      <div className="flex flex-col md:flex-row md:items-center gap-1.5 md:gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
+        {/* Transpose */}
         <div className="flex items-center gap-1 flex-wrap">
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mr-0.5">移调</span>
           {[-5, -4, -3, -2, -1, +1, +2, +3, +4, +5].map(n => (
@@ -180,8 +182,8 @@ export default function ComposeTab() {
           ))}
         </div>
 
-        {/* Tools — always on its own line */}
-        <div className="flex items-center gap-1.5">
+        {/* Tools */}
+        <div className="flex items-center gap-1.5 md:ml-auto">
           <button
             onClick={() => metronome.toggle(bpm, TS_BEATS[timeSig] ?? 4)}
             title="节拍器"
