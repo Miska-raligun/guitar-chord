@@ -34,7 +34,7 @@ type Panel = 'ai' | 'save' | 'library' | null
 export default function ComposeTab() {
   const {
     state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, resetBars, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, loadComposition, transpose, play, stop,
   } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition, exportAll, importFrom } = useSavedCompositions()
   const { generate, isLoading: aiLoading, error: aiError, clearError: clearAiError } = useAiCompose()
@@ -64,21 +64,20 @@ export default function ComposeTab() {
   }, [])
 
   function applyComposition(src: AiComposition | SavedComposition) {
-    resetBars(src.chords.length)
-    setBpm(src.bpm)
-    setPattern(src.pattern)
-    setKeyRoot(src.keyRoot)
-    if (src.timeSig) setTimeSig(src.timeSig)
-    if ('noteDuration' in src && src.noteDuration) setNoteDuration(src.noteDuration)
-    src.chords.forEach((slot, i) => setChordSlot(i, slot))
-    src.melody.forEach((bar, i) => bar.forEach((note, j) => setMelodyNote(i, j, note)))
+    loadComposition(src.chords, src.melody, {
+      bpm:          src.bpm,
+      pattern:      src.pattern,
+      keyRoot:      src.keyRoot,
+      timeSig:      src.timeSig,
+      noteDuration: 'noteDuration' in src ? src.noteDuration : undefined,
+    })
     if ('tone' in src && src.tone) setToneConfig(src.tone)
   }
 
-  async function handleAiGenerate() {
+  async function handleAiGenerate(targetBars?: number) {
     if (!aiPrompt.trim() || aiLoading) return
     const config = loadApiConfig()
-    const r = await generate(aiPrompt, config)
+    const r = await generate(aiPrompt, config, targetBars)
     if (r) setAiResult(r)
   }
 

@@ -349,11 +349,44 @@ export function useSequencer() {
     setState(s => ({ ...s, chords, melody }))
   }, [stop])
 
+  // Atomically load a full composition in one setState — avoids timing issues
+  // with batching multiple setChordSlot calls
+  const loadComposition = useCallback((
+    chords: ChordSlot[],
+    melody: (MelodyNote | null)[][],
+    opts: {
+      bpm?: number
+      pattern?: SequencerState['pattern']
+      keyRoot?: number
+      timeSig?: TimeSig
+      noteDuration?: SequencerState['noteDuration']
+    } = {}
+  ) => {
+    stop()
+    const newChords = [...chords]
+    const newMelody = [...melody]
+    chordsRef.current = newChords
+    melodyRef.current = newMelody
+    if (opts.bpm      !== undefined) bpmRef.current     = opts.bpm
+    if (opts.pattern  !== undefined) patternRef.current = opts.pattern
+    if (opts.timeSig  !== undefined) timeSigRef.current = opts.timeSig
+    setState(s => ({
+      ...s,
+      chords: newChords,
+      melody: newMelody,
+      ...(opts.bpm         !== undefined ? { bpm:          opts.bpm         } : {}),
+      ...(opts.pattern     !== undefined ? { pattern:      opts.pattern     } : {}),
+      ...(opts.keyRoot     !== undefined ? { keyRoot:      opts.keyRoot     } : {}),
+      ...(opts.timeSig     !== undefined ? { timeSig:      opts.timeSig     } : {}),
+      ...(opts.noteDuration !== undefined ? { noteDuration: opts.noteDuration } : {}),
+    }))
+  }, [stop])
+
   useEffect(() => () => stop(), [stop])
 
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, resetBars, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
   }
 }

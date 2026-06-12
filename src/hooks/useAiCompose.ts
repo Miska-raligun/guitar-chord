@@ -14,17 +14,17 @@ Schema:
   "timeSig": "4/4"|"3/4"|"6/8"|"2/4",
   "pattern": "53231323"|"x3231323"|"3_12_3"|"strum",
   "keyRoot": <integer 0-11>,
-  "bars": <integer: 4|8|12|16|32>,
+  "bars": <integer — MUST equal the exact number of items in both chords and melody arrays>,
   "tone": {"mode": "acoustic"|"electric", "effect": "clean"|"overdrive"|"distortion"},
-  "chords": [N items matching bars: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
-  "melody": [N items (one per bar): array of eighth-note slots — count depends on timeSig:
+  "chords": [exactly bars items: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
+  "melody": [exactly bars items (one per bar): array of eighth-note slots — count depends on timeSig:
     4/4 → 8 slots per bar, 3/4 → 6 slots, 6/8 → 6 slots, 2/4 → 4 slots
     each slot: {"semitone": <integer 0-11>}|null]
 }
 
 keyRoot: C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11
 pattern: 53231323=folk fingerpicking, x3231323=muted folk, 3_12_3=classical, strum=strumming
-bars: choose 4 for a short loop, 8 for a verse, 12 for blues/extended, 16 for a full section, 32 for a complete song section. Match to the user's request.
+bars: CRITICAL — if the user specifies a bar count (e.g. "12小节", "16 bars"), bars MUST be exactly that number and chords/melody arrays MUST each contain exactly that many items. If unspecified, choose: 4 for a short loop, 8 for a verse, 12 for blues, 16 for a full section.
 tone: acoustic for folk/classical/fingerpicking, electric+clean for jazz/pop, electric+overdrive for rock, electric+distortion for metal/heavy rock.
 timeSig: choose to match the requested style — 6/8/3/4 for triple/waltz feel, 4/4 for most pop/folk, 2/4 for march.
 null root/suffix = empty bar (silence). melody null = no note on that beat.
@@ -95,7 +95,7 @@ async function callAnthropic(prompt: string, config: ApiConfig): Promise<string>
   return data.content[0].text as string
 }
 
-function parseComposition(raw: string): AiComposition {
+function parseComposition(raw: string, targetBars?: number): AiComposition {
   const json = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
   const obj = JSON.parse(json)
 
@@ -106,8 +106,8 @@ function parseComposition(raw: string): AiComposition {
     : '53231323'
   const keyRoot = Math.max(0, Math.min(11, Number(obj.keyRoot) || 0))
 
-  // Variable bar count: respect obj.bars, fall back to chords length, default 8
-  const rawBars = Number(obj.bars) || (Array.isArray(obj.chords) ? obj.chords.length : 8)
+  // targetBars (user-selected) takes priority; fall back to obj.bars, then chords.length
+  const rawBars = targetBars ?? Number(obj.bars) ?? (Array.isArray(obj.chords) ? obj.chords.length : 8)
   const numBars = Math.max(1, Math.min(32, rawBars))
 
   const chords: ChordSlot[] = Array.isArray(obj.chords)
@@ -155,18 +155,22 @@ export function useAiCompose() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
-  async function generate(prompt: string, config: ApiConfig): Promise<AiComposition | null> {
+  async function generate(prompt: string, config: ApiConfig, targetBars?: number): Promise<AiComposition | null> {
     if (!config.apiKey.trim()) {
       setError('请先配置 API Key')
       return null
     }
     setIsLoading(true)
     setError(null)
+    // Prepend bar count requirement so the model knows exactly how many items to produce
+    const userMsg = targetBars
+      ? `[要求恰好 ${targetBars} 小节，bars=${targetBars}，chords 和 melody 各有 ${targetBars} 项] ${prompt}`
+      : prompt
     try {
       const raw = config.provider === 'anthropic'
-        ? await callAnthropic(prompt, config)
-        : await callOpenAi(prompt, config)
-      return parseComposition(raw)
+        ? await callAnthropic(userMsg, config)
+        : await callOpenAi(userMsg, config)
+      return parseComposition(raw, targetBars)
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败，请检查网络和配置')
       return null
