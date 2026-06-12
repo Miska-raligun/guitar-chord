@@ -72,7 +72,12 @@ export default function AiPanel({
                 result.timeSig,
                 PATTERN_LABELS[result.pattern] ?? result.pattern,
                 result.bpm + ' BPM',
+                result.chords.length + ' 小节',
                 ...(melodyCount > 0 ? ['旋律 ' + melodyCount + ' 音'] : []),
+                ...(result.tone ? [
+                  (result.tone.mode === 'acoustic' ? '木吉他' : '电吉他') + '·' +
+                  (result.tone.effect === 'clean' ? '清音' : result.tone.effect === 'overdrive' ? '过载' : '失真'),
+                ] : []),
               ].map(tag => (
                 <span key={tag} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-medium">
                   {tag}
@@ -80,7 +85,7 @@ export default function AiPanel({
               ))}
             </div>
 
-            <div className="grid grid-cols-4 gap-1.5 mb-4">
+            <div className={`grid gap-1.5 mb-4 ${result.chords.length <= 8 ? 'grid-cols-4' : 'grid-cols-4 sm:grid-cols-8'} overflow-y-auto max-h-40 scrollbar-none`}>
               {result.chords.map((slot, i) => (
                 <div
                   key={i}

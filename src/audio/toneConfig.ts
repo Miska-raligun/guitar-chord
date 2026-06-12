@@ -24,19 +24,20 @@ export interface KsToneParams {
 
 // ── Lookup table for (position × active_type) → base KS params ──────────────
 // active_type: 'S' | 'H' | 'SH' (mixed combined position)
-const TONE_TABLE: Record<string, { loopA: number; decay: number }> = {
-  B_S:    { loopA: 0.72, decay: 0.9960 },
-  B_H:    { loopA: 0.62, decay: 0.9975 },
-  BM_S:   { loopA: 0.66, decay: 0.9968 },
-  BM_SH:  { loopA: 0.64, decay: 0.9970 },
-  BM_H:   { loopA: 0.57, decay: 0.9978 },
-  M_S:    { loopA: 0.60, decay: 0.9970 },
-  M_H:    { loopA: 0.52, decay: 0.9982 },
-  MN_S:   { loopA: 0.57, decay: 0.9972 },
-  MN_SH:  { loopA: 0.54, decay: 0.9975 },
-  MN_H:   { loopA: 0.49, decay: 0.9985 },
-  N_S:    { loopA: 0.56, decay: 0.9973 },
-  N_H:    { loopA: 0.44, decay: 0.9988 },
+// lpClean: gentle post-KS lowpass for clean mode (0 = bypass / bright)
+const TONE_TABLE: Record<string, { loopA: number; decay: number; lpClean: number }> = {
+  B_S:    { loopA: 0.82, decay: 0.9960, lpClean: 0     },
+  B_H:    { loopA: 0.66, decay: 0.9975, lpClean: 5500  },
+  BM_S:   { loopA: 0.76, decay: 0.9968, lpClean: 0     },
+  BM_SH:  { loopA: 0.72, decay: 0.9970, lpClean: 4000  },
+  BM_H:   { loopA: 0.61, decay: 0.9978, lpClean: 5000  },
+  M_S:    { loopA: 0.64, decay: 0.9970, lpClean: 4500  },
+  M_H:    { loopA: 0.52, decay: 0.9982, lpClean: 5500  },
+  MN_S:   { loopA: 0.58, decay: 0.9972, lpClean: 5000  },
+  MN_SH:  { loopA: 0.54, decay: 0.9975, lpClean: 5200  },
+  MN_H:   { loopA: 0.44, decay: 0.9985, lpClean: 5200  },
+  N_S:    { loopA: 0.52, decay: 0.9973, lpClean: 5000  },
+  N_H:    { loopA: 0.32, decay: 0.9988, lpClean: 4000  },
 }
 
 function activeTypeKey(cfg: PickupConfig): string {
@@ -66,11 +67,13 @@ export function computeKsParams(cfg: PickupConfig): KsToneParams {
   if (cfg.mode === 'acoustic') return ACOUSTIC_PARAMS
 
   const key = `${cfg.position}_${activeTypeKey(cfg)}`
-  const base = TONE_TABLE[key] ?? { loopA: 0.60, decay: 0.997 }
+  const base = TONE_TABLE[key] ?? { loopA: 0.60, decay: 0.997, lpClean: 0 }
 
   const driveAmount = cfg.effect === 'clean' ? 0 : cfg.effect === 'overdrive' ? 0.35 : 0.75
-  const decayBoost  = cfg.effect === 'clean' ? 0 : cfg.effect === 'overdrive' ? 0.001 : 0.002
-  const lpCutoff    = cfg.effect === 'overdrive' ? 6000 : cfg.effect === 'distortion' ? 4000 : 0
+  const decayBoost  = cfg.effect === 'clean' ? 0 : cfg.effect === 'overdrive' ? 0.001 : 0.0015
+  const lpCutoff    = cfg.effect === 'overdrive' ? 6000
+                    : cfg.effect === 'distortion' ? 4000
+                    : base.lpClean
 
   return {
     loopFilterA: base.loopA,

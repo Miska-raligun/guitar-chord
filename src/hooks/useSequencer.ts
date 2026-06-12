@@ -339,11 +339,21 @@ export function useSequencer() {
     })
   }, [stop])
 
+  const resetBars = useCallback((numBars: number) => {
+    stop()
+    const n = Math.max(1, Math.min(MAX_BARS, numBars))
+    const chords = makeEmptyChords(n)
+    const melody = makeEmptyMelody(n)
+    chordsRef.current = chords
+    melodyRef.current = melody
+    setState(s => ({ ...s, chords, melody }))
+  }, [stop])
+
   useEffect(() => () => stop(), [stop])
 
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, resetBars, transpose, play, stop,
   }
 }

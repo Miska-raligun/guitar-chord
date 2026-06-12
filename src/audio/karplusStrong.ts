@@ -72,6 +72,13 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
   applyDrive(out, driveAmount)
   applyLowpass(out, lpCutoff, sr)
 
+  // Fade out the last 25% — prevents abrupt cutoff and reduces overlap buildup
+  const fadeStart = Math.floor(total * 0.75)
+  for (let i = fadeStart; i < total; i++) {
+    const t = (i - fadeStart) / (total - fadeStart)
+    out[i] *= (1 - t) * (1 - t)
+  }
+
   const buf = ctx.createBuffer(1, total, sr)
   buf.copyToChannel(out, 0)
   return buf
@@ -121,7 +128,11 @@ function fireAt(buf: AudioBuffer, time: number, volume: number): void {
 }
 
 export function pluckStringAt(freq: number, time: number, volume = 0.7): void {
-  fireAt(buildKSBuffer(freq, 2.2), time, volume)
+  const cfg = getToneConfig()
+  const dur = cfg.mode === 'electric'
+    ? (cfg.effect === 'distortion' ? 0.7 : cfg.effect === 'overdrive' ? 1.2 : 2.0)
+    : 2.2
+  fireAt(buildKSBuffer(freq, dur), time, volume)
 }
 
 export function pluckString(freq: number, volume = 0.8): void {

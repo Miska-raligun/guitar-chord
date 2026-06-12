@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ApiConfig } from '../types/compose'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
+import type { GuitarMode, EffectType } from '../audio/toneConfig'
 import { getMasterSlotsPerBar } from './useSequencer'
 
 const VALID_TIMSIGS = ['4/4', '3/4', '6/8', '2/4'] as const
@@ -13,17 +14,26 @@ Schema:
   "timeSig": "4/4"|"3/4"|"6/8"|"2/4",
   "pattern": "53231323"|"x3231323"|"3_12_3"|"strum",
   "keyRoot": <integer 0-11>,
-  "chords": [exactly 8 items: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
-  "melody": [exactly 8 items (one per bar): array of eighth-note slots — count depends on timeSig:
+  "bars": <integer: 4|8|12|16|32>,
+  "tone": {"mode": "acoustic"|"electric", "effect": "clean"|"overdrive"|"distortion"},
+  "chords": [N items matching bars: {"root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null, "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null, "positionIndex": 0}],
+  "melody": [N items (one per bar): array of eighth-note slots — count depends on timeSig:
     4/4 → 8 slots per bar, 3/4 → 6 slots, 6/8 → 6 slots, 2/4 → 4 slots
     each slot: {"semitone": <integer 0-11>}|null]
 }
 
 keyRoot: C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11
 pattern: 53231323=folk fingerpicking, x3231323=muted folk, 3_12_3=classical, strum=strumming
+bars: choose 4 for a short loop, 8 for a verse, 12 for blues/extended, 16 for a full section, 32 for a complete song section. Match to the user's request.
+tone: acoustic for folk/classical/fingerpicking, electric+clean for jazz/pop, electric+overdrive for rock, electric+distortion for metal/heavy rock.
 timeSig: choose to match the requested style — 6/8/3/4 for triple/waltz feel, 4/4 for most pop/folk, 2/4 for march.
 null root/suffix = empty bar (silence). melody null = no note on that beat.
 For simple accompaniment leave all melody beats null. Add melody notes for a melodic lead line.`
+
+export interface AiTone {
+  mode: GuitarMode
+  effect: EffectType
+}
 
 export interface AiComposition {
   bpm: number
@@ -32,6 +42,7 @@ export interface AiComposition {
   keyRoot: number
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
+  tone?: AiTone
 }
 
 async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
@@ -95,21 +106,25 @@ function parseComposition(raw: string): AiComposition {
     : '53231323'
   const keyRoot = Math.max(0, Math.min(11, Number(obj.keyRoot) || 0))
 
+  // Variable bar count: respect obj.bars, fall back to chords length, default 8
+  const rawBars = Number(obj.bars) || (Array.isArray(obj.chords) ? obj.chords.length : 8)
+  const numBars = Math.max(1, Math.min(32, rawBars))
+
   const chords: ChordSlot[] = Array.isArray(obj.chords)
-    ? obj.chords.slice(0, 8).map((c: { root?: string | null; suffix?: string | null }) => ({
+    ? obj.chords.slice(0, numBars).map((c: { root?: string | null; suffix?: string | null }) => ({
         root: c.root ?? null,
         suffix: c.suffix ?? null,
         positionIndex: 0,
       }))
     : []
-  while (chords.length < 8) chords.push({ root: null, suffix: null, positionIndex: 0 })
+  while (chords.length < numBars) chords.push({ root: null, suffix: null, positionIndex: 0 })
 
   // AI returns N eighth-note slots per bar (N = masterSlotsPerBar / 2)
   // We always store 16 slots per bar in the sequencer; map slot i → master[i*2]
   const slotsPerBar = getMasterSlotsPerBar(timeSig) / 2
 
   const melody: (MelodyNote | null)[][] = Array.isArray(obj.melody)
-    ? obj.melody.slice(0, 8).map((bar: ({ semitone?: number } | null)[]) => {
+    ? obj.melody.slice(0, numBars).map((bar: ({ semitone?: number } | null)[]) => {
         const master: (MelodyNote | null)[] = Array(16).fill(null)
         if (Array.isArray(bar)) {
           bar.slice(0, slotsPerBar).forEach((n: { semitone?: number } | null, i: number) => {
@@ -121,9 +136,19 @@ function parseComposition(raw: string): AiComposition {
         return master
       })
     : []
-  while (melody.length < 8) melody.push(Array(16).fill(null))
+  while (melody.length < numBars) melody.push(Array(16).fill(null))
 
-  return { bpm, timeSig, pattern, keyRoot, chords, melody }
+  // Optional tone suggestion
+  let tone: AiTone | undefined
+  if (obj.tone && typeof obj.tone === 'object') {
+    const mode = obj.tone.mode === 'electric' ? 'electric' : 'acoustic'
+    const effect = (['clean','overdrive','distortion'] as const).includes(obj.tone.effect)
+      ? obj.tone.effect as EffectType
+      : 'clean'
+    tone = { mode, effect }
+  }
+
+  return { bpm, timeSig, pattern, keyRoot, chords, melody, tone }
 }
 
 export function useAiCompose() {
