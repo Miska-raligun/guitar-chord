@@ -43,7 +43,16 @@ export default function ComposeTab() {
   const [panel,     setPanel]     = useState<Panel>(null)
   const [aiPrompt,  setAiPrompt]  = useState('')
   const [aiResult,  setAiResult]  = useState<AiComposition | null>(null)
+  const [aiAppend,  setAiAppend]  = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+
+  const hasExistingContent = state.chords.some(c => c.root !== null)
+
+  function openAiPanel() {
+    // Default to 续写 when there's already something composed
+    if (hasExistingContent) setAiAppend(true)
+    setPanel('ai')
+  }
 
   const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
 
@@ -86,10 +95,10 @@ export default function ComposeTab() {
     }
   }
 
-  async function handleAiGenerate(targetBars?: number, append = false) {
+  async function handleAiGenerate(targetBars?: number) {
     if (!aiPrompt.trim() || aiLoading) return
     const config = loadApiConfig()
-    const continueFrom: ContinueFromState | undefined = append ? {
+    const continueFrom: ContinueFromState | undefined = aiAppend ? {
       chords:  state.chords,
       bpm:     state.bpm,
       timeSig: state.timeSig,
@@ -256,7 +265,7 @@ export default function ComposeTab() {
       {/* ── Action row (AI / Save / Library) ── */}
       <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
         <button
-          onClick={() => setPanel('ai')}
+          onClick={openAiPanel}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md text-xs font-medium ${
             aiLoading
               ? 'bg-amber-500/15 text-amber-400 animate-pulse'
@@ -336,7 +345,7 @@ export default function ComposeTab() {
       {/* ── Panels ── */}
       {panel === 'ai' && (
         <AiPanel
-          onGenerate={(result, append) => { applyComposition(result, append); setAiResult(null); setPanel(null) }}
+          onGenerate={(result) => { applyComposition(result, aiAppend); setAiResult(null); setPanel(null) }}
           onClose={() => setPanel(null)}
           prompt={aiPrompt}
           onPromptChange={setAiPrompt}
@@ -346,7 +355,9 @@ export default function ComposeTab() {
           error={aiError}
           onClearError={clearAiError}
           onTriggerGenerate={handleAiGenerate}
-          hasExistingContent={state.chords.some(c => c.root !== null)}
+          hasExistingContent={hasExistingContent}
+          aiAppend={aiAppend}
+          onAiAppendChange={setAiAppend}
         />
       )}
       {panel === 'save' && (

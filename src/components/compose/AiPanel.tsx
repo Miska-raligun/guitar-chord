@@ -17,7 +17,7 @@ const BAR_OPTIONS = [
 ]
 
 interface Props {
-  onGenerate: (result: AiComposition, append: boolean) => void
+  onGenerate: (result: AiComposition) => void
   onClose: () => void
   prompt: string
   onPromptChange: (p: string) => void
@@ -26,8 +26,10 @@ interface Props {
   isLoading: boolean
   error: string | null
   onClearError: () => void
-  onTriggerGenerate: (targetBars?: number, append?: boolean) => void
+  onTriggerGenerate: (targetBars?: number) => void
   hasExistingContent: boolean
+  aiAppend: boolean
+  onAiAppendChange: (v: boolean) => void
 }
 
 export default function AiPanel({
@@ -37,10 +39,10 @@ export default function AiPanel({
   isLoading, error, onClearError,
   onTriggerGenerate,
   hasExistingContent,
+  aiAppend, onAiAppendChange,
 }: Props) {
   const [showConfig, setShowConfig] = useState(false)
   const [barTarget, setBarTarget]   = useState(0)
-  const [aiAppend,  setAiAppend]    = useState(false)
 
   if (showConfig) return <ApiConfigModal onClose={() => setShowConfig(false)} />
 
@@ -134,7 +136,7 @@ export default function AiPanel({
                   重新生成
                 </button>
                 <button
-                  onClick={() => { onGenerate(result, aiAppend); onResultClear() }}
+                  onClick={() => { onGenerate(result); onResultClear() }}
                   className="flex-1 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400"
                 >
                   ✓ {aiAppend ? '追加到编曲' : '应用到编曲'}
@@ -150,7 +152,7 @@ export default function AiPanel({
                   <span className="text-xs text-zinc-500">模式</span>
                   <div className="flex rounded-lg overflow-hidden border border-zinc-700">
                     <button
-                      onClick={() => setAiAppend(false)}
+                      onClick={() => onAiAppendChange(false)}
                       className={`px-3 py-1.5 text-xs transition-colors ${
                         !aiAppend ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                       }`}
@@ -158,7 +160,7 @@ export default function AiPanel({
                       新建编曲
                     </button>
                     <button
-                      onClick={() => setAiAppend(true)}
+                      onClick={() => onAiAppendChange(true)}
                       className={`px-3 py-1.5 text-xs transition-colors ${
                         aiAppend ? 'bg-blue-500 text-white font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                       }`}
@@ -207,7 +209,7 @@ export default function AiPanel({
               )}
 
               <button
-                onClick={() => onTriggerGenerate(barTarget > 0 ? barTarget : undefined, aiAppend)}
+                onClick={() => onTriggerGenerate(barTarget > 0 ? barTarget : undefined)}
                 disabled={isLoading || !prompt.trim()}
                 className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
                   isLoading || !prompt.trim()
