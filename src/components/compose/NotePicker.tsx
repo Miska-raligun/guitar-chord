@@ -21,7 +21,7 @@ export default function NotePicker({ keyRoot, noteDuration, selected, onSelect, 
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-2xl p-4 pb-8 max-h-[80vh] overflow-y-auto scrollbar-none"
+        className="w-full bg-zinc-900 border-t border-zinc-700 rounded-t-2xl p-4 pb-8 max-h-[90vh] overflow-y-auto scrollbar-none"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
