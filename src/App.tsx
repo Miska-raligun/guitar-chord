@@ -23,7 +23,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="h-screen overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col">
       <Header />
       <TabBar active={tab} onChange={changeTab} />
       <main className={`flex-1 overflow-y-auto transition-opacity duration-150 ${fading ? 'opacity-0' : 'opacity-100'}`}>
