@@ -26,18 +26,18 @@ export interface KsToneParams {
 // active_type: 'S' | 'H' | 'SH' (mixed combined position)
 // lpClean: gentle post-KS lowpass for clean mode (0 = bypass / bright)
 const TONE_TABLE: Record<string, { loopA: number; decay: number; lpClean: number }> = {
-  B_S:    { loopA: 0.82, decay: 0.9960, lpClean: 0     },
-  B_H:    { loopA: 0.66, decay: 0.9975, lpClean: 5500  },
-  BM_S:   { loopA: 0.76, decay: 0.9968, lpClean: 0     },
-  BM_SH:  { loopA: 0.72, decay: 0.9970, lpClean: 4000  },
-  BM_H:   { loopA: 0.61, decay: 0.9978, lpClean: 5000  },
-  M_S:    { loopA: 0.64, decay: 0.9970, lpClean: 4500  },
+  B_S:    { loopA: 0.75, decay: 0.9960, lpClean: 0     },
+  B_H:    { loopA: 0.63, decay: 0.9975, lpClean: 5500  },
+  BM_S:   { loopA: 0.70, decay: 0.9968, lpClean: 0     },
+  BM_SH:  { loopA: 0.66, decay: 0.9970, lpClean: 4000  },
+  BM_H:   { loopA: 0.59, decay: 0.9978, lpClean: 5000  },
+  M_S:    { loopA: 0.62, decay: 0.9970, lpClean: 4500  },
   M_H:    { loopA: 0.52, decay: 0.9982, lpClean: 5500  },
-  MN_S:   { loopA: 0.58, decay: 0.9972, lpClean: 5000  },
-  MN_SH:  { loopA: 0.54, decay: 0.9975, lpClean: 5200  },
+  MN_S:   { loopA: 0.57, decay: 0.9972, lpClean: 5000  },
+  MN_SH:  { loopA: 0.53, decay: 0.9975, lpClean: 5200  },
   MN_H:   { loopA: 0.44, decay: 0.9985, lpClean: 5200  },
-  N_S:    { loopA: 0.52, decay: 0.9973, lpClean: 5000  },
-  N_H:    { loopA: 0.32, decay: 0.9988, lpClean: 4000  },
+  N_S:    { loopA: 0.51, decay: 0.9973, lpClean: 5000  },
+  N_H:    { loopA: 0.36, decay: 0.9988, lpClean: 4000  },
 }
 
 function activeTypeKey(cfg: PickupConfig): string {

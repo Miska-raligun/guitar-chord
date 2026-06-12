@@ -57,6 +57,8 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
 
   const delay = new Float32Array(N)
   for (let i = 0; i < N; i++) delay[i] = Math.random() * 2 - 1
+  // Pre-smooth initial excitation to soften the attack transient
+  for (let i = 1; i < N; i++) delay[i] = 0.55 * delay[i] + 0.45 * delay[i - 1]
 
   const out = new Float32Array(total)
   const b = loopFilterA
