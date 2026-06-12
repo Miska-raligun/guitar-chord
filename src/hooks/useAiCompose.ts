@@ -17,7 +17,7 @@ export interface ContinueFromState {
 function buildContinuationPrefix(ctx: ContinueFromState, targetBars: number | undefined): string {
   const chordNames = ctx.chords
     .map(c => c.root
-      ? c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '') + ((c.bars ?? 1) > 1 ? `×${c.bars}` : '')
+      ? c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '')
       : '─')
     .join(' ')
   const bars = targetBars ?? 8

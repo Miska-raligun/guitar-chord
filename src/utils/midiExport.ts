@@ -88,40 +88,37 @@ export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): v
   // ── note events ─────────────────────────────────────────────────────────
   const events: NoteEvent[] = []
 
-  // Expand chord slots into physical bars
-  const physChords: ChordSlot[] = []
-  chords.forEach(slot => {
-    const bars = slot.bars ?? 1
-    for (let b = 0; b < bars; b++) physChords.push(slot)
-  })
+  // Chord event timeline using noteValue for strum-aware timing
+  let chordTick = 0
+  chords.forEach((slot, slotIdx) => {
+    const noteValue     = slot.noteValue ?? 1
+    const chordDurTicks = Math.round(ticksPerBar / noteValue)
 
-  // Chord track (channel 0): voiced arpeggio, held for the whole bar
-  physChords.forEach((slot, bar) => {
-    if (!slot.root || !slot.suffix) return
-    const root      = ROOT_SEMITONE[slot.root] ?? 0
-    const intervals = CHORD_INTERVALS[slot.suffix] ?? CHORD_INTERVALS.major
-    const barStart  = bar * ticksPerBar
-    intervals.forEach((iv, i) => {
-      const octave  = i === 0 ? 3 : 4
-      const note    = 12 * octave + ((root + iv) % 12)
-      const onTick  = barStart + i * 5        // slight arpeggio
-      const offTick = barStart + ticksPerBar - 10
-      events.push({ tick: onTick,  on: true,  channel: 0, note, velocity: i === 0 ? 90 : 70 })
-      events.push({ tick: offTick, on: false, channel: 0, note, velocity: 0 })
-    })
-  })
+    if (slot.root && slot.suffix) {
+      const root      = ROOT_SEMITONE[slot.root] ?? 0
+      const intervals = CHORD_INTERVALS[slot.suffix] ?? CHORD_INTERVALS.major
+      intervals.forEach((iv, i) => {
+        const octave  = i === 0 ? 3 : 4
+        const note    = 12 * octave + ((root + iv) % 12)
+        const onTick  = chordTick + i * 5
+        const offTick = chordTick + chordDurTicks - 10
+        events.push({ tick: onTick,  on: true,  channel: 0, note, velocity: i === 0 ? 90 : 70 })
+        events.push({ tick: offTick, on: false, channel: 0, note, velocity: 0 })
+      })
+    }
 
-  // Melody track (channel 1): exact slot positions, C4 octave
-  melody.forEach((bar, barIdx) => {
-    const barStart = barIdx * ticksPerBar
-    bar.forEach((note, slot) => {
+    // Melody stored per chord slot
+    const barRow = melody[slotIdx] ?? []
+    barRow.forEach((note, masterSlot) => {
       if (!note) return
       const midiNote = 60 + note.semitone
-      const onTick   = barStart + slot * tSlot
+      const onTick   = chordTick + masterSlot * tSlot
       const offTick  = onTick + Math.max(tSlot, note.duration * tSlot) - 10
       events.push({ tick: onTick,  on: true,  channel: 1, note: midiNote, velocity: 100 })
       events.push({ tick: offTick, on: false, channel: 1, note: midiNote, velocity: 0 })
     })
+
+    chordTick += chordDurTicks
   })
 
   // ── assemble & download ─────────────────────────────────────────────────

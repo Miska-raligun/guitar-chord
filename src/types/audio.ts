@@ -41,7 +41,7 @@ export interface ChordSlot {
   root: string | null       // null = 空小节
   suffix: string | null
   positionIndex: number
-  bars?: number             // how many physical bars this slot spans (default 1)
+  noteValue?: 1 | 2 | 4 | 8 | 16  // strum 模式时值分母：1=全音符(1小节), 2=半, 4=四分, 8=八分, 16=十六分
 }
 
 export interface MelodyNote {

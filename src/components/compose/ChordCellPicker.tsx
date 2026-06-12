@@ -6,35 +6,42 @@ import { useChordDb } from '../../hooks/useChordDb'
 
 interface Props {
   slot: ChordSlot
+  isStrum: boolean
   onSelect: (slot: ChordSlot) => void
   onClose: () => void
 }
 
-const BAR_OPTIONS = [1, 2, 3, 4]
+const NOTE_VALUE_OPTIONS: { v: 1|2|4|8|16; label: string; title: string }[] = [
+  { v: 1,  label: '全',  title: '全音符（1小节）' },
+  { v: 2,  label: '半',  title: '二分音符（½小节）' },
+  { v: 4,  label: '♩',   title: '四分音符（¼小节）' },
+  { v: 8,  label: '♪',   title: '八分音符（⅛小节）' },
+  { v: 16, label: '♬',   title: '十六分音符（1/16小节）' },
+]
 
-export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
+export default function ChordCellPicker({ slot, isStrum, onSelect, onClose }: Props) {
   const { suffixes } = useChordDb()
-  const [root,     setRoot]     = useState(slot.root ?? 'C')
-  const [suffix,   setSuffix]   = useState(slot.suffix ?? 'major')
-  const [barCount, setBarCount] = useState(slot.bars ?? 1)
+  const [root,      setRoot]      = useState(slot.root ?? 'C')
+  const [suffix,    setSuffix]    = useState(slot.suffix ?? 'major')
+  const [noteValue, setNoteValue] = useState<1|2|4|8|16>(slot.noteValue ?? 1)
 
-  function commit(r: string, s: string, bc: number) {
-    onSelect({ root: r, suffix: s, positionIndex: 0, ...(bc > 1 ? { bars: bc } : {}) })
+  function commit(r: string, s: string, nv: 1|2|4|8|16) {
+    onSelect({ root: r, suffix: s, positionIndex: 0, ...(nv > 1 ? { noteValue: nv } : {}) })
   }
 
   function handleRoot(r: string) {
     setRoot(r)
-    commit(r, suffix, barCount)
+    commit(r, suffix, noteValue)
   }
 
   function handleSuffix(s: string) {
     setSuffix(s)
-    commit(root, s, barCount)
+    commit(root, s, noteValue)
   }
 
-  function handleBars(bc: number) {
-    setBarCount(bc)
-    commit(root, suffix, bc)
+  function handleNoteValue(nv: 1|2|4|8|16) {
+    setNoteValue(nv)
+    commit(root, suffix, nv)
   }
 
   return (
@@ -63,25 +70,28 @@ export default function ChordCellPicker({ slot, onSelect, onClose }: Props) {
           </div>
         </div>
 
-        {/* Bar span selector */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs text-zinc-500 shrink-0">占用小节</span>
-          <div className="flex rounded-lg overflow-hidden border border-zinc-700">
-            {BAR_OPTIONS.map(n => (
-              <button
-                key={n}
-                onClick={() => handleBars(n)}
-                className={`px-3 py-1.5 text-xs transition-colors ${
-                  barCount === n
-                    ? 'bg-amber-500 text-zinc-950 font-semibold'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+        {/* Note value selector — strum mode only */}
+        {isStrum && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs text-zinc-500 shrink-0">时值</span>
+            <div className="flex rounded-lg overflow-hidden border border-zinc-700">
+              {NOTE_VALUE_OPTIONS.map(({ v, label, title }) => (
+                <button
+                  key={v}
+                  title={title}
+                  onClick={() => handleNoteValue(v)}
+                  className={`px-3 py-1.5 text-xs transition-colors ${
+                    noteValue === v
+                      ? 'bg-amber-500 text-zinc-950 font-semibold'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mb-3">
           <RootSelector selected={root} onChange={handleRoot} />

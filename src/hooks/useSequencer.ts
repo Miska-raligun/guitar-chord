@@ -47,20 +47,14 @@ export function getMasterSlotsPerBar(timeSig: TimeSig): number {
   return 8  // 2/4
 }
 
-// Total physical bars = sum of chord slot spans
-export function getTotalPhysicalBars(chords: ChordSlot[]): number {
-  return chords.reduce((sum, c) => sum + (c.bars ?? 1), 0)
+// 当前和弦槽占用的主网格槽数（strum 模式下按 noteValue 计算，其他模式固定为一小节）
+export function getChordMasterDuration(chord: ChordSlot, timeSig: TimeSig): number {
+  return Math.round(getMasterSlotsPerBar(timeSig) / (chord.noteValue ?? 1))
 }
 
-// Map a physical bar index to its chord slot
-export function getChordForPhysicalBar(chords: ChordSlot[], physicalBar: number): ChordSlot {
-  let rem = physicalBar
-  for (const slot of chords) {
-    const b = slot.bars ?? 1
-    if (rem < b) return slot
-    rem -= b
-  }
-  return chords[chords.length - 1] ?? { root: null, suffix: null, positionIndex: 0 }
+// 总和弦槽数（等于 melody 数组长度）
+export function getTotalPhysicalBars(chords: ChordSlot[]): number {
+  return chords.length
 }
 
 // 主步长始终是十六分音符时长
@@ -178,21 +172,39 @@ export function useSequencer() {
     const bpm        = bpmRef.current
     const timeSig    = timeSigRef.current
     const steps      = getPatternSteps(pat)
-    const spb        = getStepsPerBar(pat, timeSig)     // 拨弦步数/节
-    const master     = getMasterSlotsPerBar(timeSig)    // 十六分槽数/节
-    const sPerMaster = getMasterSPerStep(bpm)           // 始终是十六分音符时长
-    const arpEvery   = master / spb                     // 每隔几个主步触发一次拨弦
-    const numBars    = getTotalPhysicalBars(chordsRef.current)
-    const total      = numBars * master
+    const master     = getMasterSlotsPerBar(timeSig)
+    const sPerMaster = getMasterSPerStep(bpm)
+    const isStrum    = pat === 'strum'
+    const chords     = chordsRef.current
+
+    // Build chord event timeline (absolute master-slot positions)
+    let cumSlots = 0
+    const chordStarts: number[] = []
+    const chordDurs: number[] = []
+    for (const c of chords) {
+      chordStarts.push(cumSlots)
+      const dur = isStrum ? getChordMasterDuration(c, timeSig) : master
+      chordDurs.push(dur)
+      cumSlots += dur
+    }
+    const total = cumSlots || master
+
+    const spb      = getStepsPerBar(pat, timeSig)
+    const arpEvery = master / spb
 
     while (nextTimeRef.current < ctx.currentTime + 0.1) {
-      const globalStep  = stepRef.current % total
-      const bar         = Math.floor(globalStep / master)
-      const masterInBar = globalStep % master
+      const globalStep = stepRef.current % total
 
-      // 小节切换
-      if (masterInBar === 0) {
-        const slot = getChordForPhysicalBar(chordsRef.current, bar)
+      // Find current chord slot index
+      let chordIdx = 0
+      for (let i = chords.length - 1; i >= 0; i--) {
+        if (globalStep >= chordStarts[i]) { chordIdx = i; break }
+      }
+      const posInChord = globalStep - chordStarts[chordIdx]
+
+      // Chord switch
+      if (posInChord === 0) {
+        const slot = chords[chordIdx]
         posRef.current = (slot.root && slot.suffix)
           ? (getChordEntry(slot.root, slot.suffix)?.positions[slot.positionIndex] ?? null)
           : null
@@ -200,18 +212,25 @@ export function useSequencer() {
         const ms = Math.max(0, (nextTimeRef.current - ctx.currentTime) * 1000)
         setTimeout(() => {
           if (genRef.current !== gen) return
-          setState(s => ({ ...s, currentBar: bar }))
+          setState(s => ({ ...s, currentBar: chordIdx }))
         }, ms)
       }
 
-      // 拨弦：每 arpEvery 个主步触发一次
-      if (masterInBar % arpEvery === 0 && posRef.current) {
-        const arpStep = Math.round(masterInBar / arpEvery)
-        scheduleStep(steps[arpStep % steps.length], nextTimeRef.current, arpStep === 0, posRef.current)
+      if (isStrum) {
+        // Strum: one sweep per chord event
+        if (posInChord === 0 && posRef.current) {
+          scheduleStep(STRUM_DOWN, nextTimeRef.current, true, posRef.current)
+        }
+      } else {
+        // Fingerpicking / arpeggio: regular steps within the bar
+        if (posInChord % arpEvery === 0 && posRef.current) {
+          const arpStep = Math.round(posInChord / arpEvery)
+          scheduleStep(steps[arpStep % steps.length], nextTimeRef.current, arpStep === 0, posRef.current)
+        }
       }
 
-      // 旋律：直接读取对应主槽位的音符
-      const note = melodyRef.current[bar]?.[masterInBar]
+      // Melody: indexed by [chordIdx][posInChord]
+      const note = melodyRef.current[chordIdx]?.[posInChord]
       if (note) {
         pluckStringAt(semitoneToFreq(note.semitone), nextTimeRef.current + 0.005, 0.85)
       }
@@ -248,34 +267,13 @@ export function useSequencer() {
     intervalRef.current = setInterval(schedulerTick, 25)
   }, [schedulerTick])
 
+  // Simple setter: no melody resize needed (melody.length === chords.length always)
   const setChordSlot = useCallback((chordIdx: number, slot: ChordSlot) => {
     setState(s => {
-      const oldSlot = s.chords[chordIdx]
-      if (!oldSlot) return s
-      const oldBars = oldSlot.bars ?? 1
-      const newBars = slot.bars ?? 1
+      if (s.chords[chordIdx] === undefined) return s
       const chords = s.chords.map((c, i) => i === chordIdx ? slot : c)
-
-      if (oldBars === newBars) {
-        chordsRef.current = chords
-        return { ...s, chords }
-      }
-
-      // Compute start position of this chord in physical bars
-      let physStart = 0
-      for (let i = 0; i < chordIdx; i++) physStart += s.chords[i].bars ?? 1
-
-      const melody = [...s.melody]
-      if (newBars > oldBars) {
-        const ins = Array.from({ length: newBars - oldBars }, (): (MelodyNote | null)[] => Array(MASTER_SLOTS).fill(null))
-        melody.splice(physStart + oldBars, 0, ...ins)
-      } else {
-        melody.splice(physStart + newBars, oldBars - newBars)
-      }
-
       chordsRef.current = chords
-      melodyRef.current = melody
-      return { ...s, chords, melody }
+      return { ...s, chords }
     })
   }, [])
 
@@ -328,7 +326,7 @@ export function useSequencer() {
 
   const addBar = useCallback(() => {
     setState(s => {
-      if (getTotalPhysicalBars(s.chords) >= MAX_BARS) return s
+      if (s.chords.length >= MAX_BARS) return s
       const chords = [...s.chords, { root: null, suffix: null, positionIndex: 0 }]
       const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
       chordsRef.current = chords
@@ -339,18 +337,9 @@ export function useSequencer() {
 
   const removeLastBar = useCallback(() => {
     setState(s => {
-      if (s.melody.length <= 1) return s
-      const lastChord = s.chords[s.chords.length - 1]
-      const lastBars = lastChord?.bars ?? 1
+      if (s.chords.length <= 1) return s
+      const chords = s.chords.slice(0, -1)
       const melody = s.melody.slice(0, -1)
-      let chords: ChordSlot[]
-      if (lastBars > 1) {
-        chords = s.chords.map((c, i) =>
-          i === s.chords.length - 1 ? { ...c, bars: lastBars - 1 } : c
-        )
-      } else {
-        chords = s.chords.slice(0, -1)
-      }
       chordsRef.current = chords
       melodyRef.current = melody
       return { ...s, chords, melody }
@@ -395,8 +384,7 @@ export function useSequencer() {
     setState(s => ({ ...s, chords, melody }))
   }, [stop])
 
-  // Atomically load a full composition in one setState — avoids timing issues
-  // with batching multiple setChordSlot calls
+  // Atomically load a full composition
   const loadComposition = useCallback((
     chords: ChordSlot[],
     melody: (MelodyNote | null)[][],
@@ -410,10 +398,10 @@ export function useSequencer() {
   ) => {
     stop()
     const newChords = [...chords]
-    const totalPhys = getTotalPhysicalBars(newChords)
+    const n = newChords.length
     const newMelody = [...melody]
-    while (newMelody.length < totalPhys) newMelody.push(Array(MASTER_SLOTS).fill(null))
-    if (newMelody.length > totalPhys) newMelody.length = totalPhys
+    while (newMelody.length < n) newMelody.push(Array(MASTER_SLOTS).fill(null))
+    if (newMelody.length > n) newMelody.length = n
     chordsRef.current = newChords
     melodyRef.current = newMelody
     if (opts.bpm      !== undefined) bpmRef.current     = opts.bpm

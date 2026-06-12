@@ -17,7 +17,7 @@ const SUFFIXES = [
 
 // ── compact types ────────────────────────────────────────────────────────────
 
-// Chord: null (empty 1-bar) | [root_idx, suffix_idx] (1-bar) | [root_idx, suffix_idx, bars] | [-1,-1,bars] (empty multi-bar)
+// Chord: null (whole-note empty) | [r,s] (whole-note) | [r,s,nv] (noteValue>1) | [-1,-1,nv] (empty w/ noteValue)
 type CChord = [number, number] | [number, number, number] | null
 // Melody note: [bar, masterSlot, semitone, duration] or [bar, masterSlot, semitone, duration, string, fret]
 type CNote  = [number, number, number, number] | [number, number, number, number, number, number]
@@ -65,12 +65,12 @@ export function encodeShareUrl(state: SharePayload): string {
     t: Math.max(0, TIMESIGS.indexOf(state.timeSig as typeof TIMESIGS[number])),
     d: state.noteDuration,
     c: state.chords.map(slot => {
-      const bars = slot.bars ?? 1
-      if (!slot.root || !slot.suffix) return bars > 1 ? [-1, -1, bars] as [number, number, number] : null
+      const nv = slot.noteValue ?? 1
+      if (!slot.root || !slot.suffix) return nv > 1 ? [-1, -1, nv] as [number, number, number] : null
       const r = ROOTS.indexOf(slot.root as typeof ROOTS[number])
       const s = SUFFIXES.indexOf(slot.suffix as typeof SUFFIXES[number])
-      if (r === -1 || s === -1) return bars > 1 ? [-1, -1, bars] as [number, number, number] : null
-      return bars > 1 ? [r, s, bars] as [number, number, number] : [r, s] as [number, number]
+      if (r === -1 || s === -1) return nv > 1 ? [-1, -1, nv] as [number, number, number] : null
+      return nv > 1 ? [r, s, nv] as [number, number, number] : [r, s] as [number, number]
     }),
     m: [],
   }
@@ -103,11 +103,8 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
     if (typeof obj.p === 'number') {
       // ── compact format ──
       const rawChords: CChord[] = Array.isArray(obj.c) ? obj.c : []
-      const totalPhysBars = rawChords.reduce((sum, ch) => {
-        if (!ch) return sum + 1
-        return sum + (ch.length >= 3 ? ch[2] : 1)
-      }, 0) || 8
-      const melody: SharePayload['melody'] = Array.from({ length: totalPhysBars }, () =>
+      const numChords = rawChords.length || 8
+      const melody: SharePayload['melody'] = Array.from({ length: numChords }, () =>
         Array(16).fill(null)
       )
       if (Array.isArray(obj.m)) {
@@ -129,9 +126,9 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
         noteDuration: obj.d ?? 2,
         chords: rawChords.map(ch => {
           if (!ch) return { root: null, suffix: null, positionIndex: 0 }
-          const bars = ch.length >= 3 ? ch[2] : 1
-          if (ch[0] === -1) return { root: null, suffix: null, positionIndex: 0, ...(bars > 1 ? { bars } : {}) }
-          return { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0, ...(bars > 1 ? { bars } : {}) }
+          const nv = (ch.length >= 3 && ch[2] > 1) ? ch[2] as (1|2|4|8|16) : undefined
+          if (ch[0] === -1) return { root: null, suffix: null, positionIndex: 0, ...(nv ? { noteValue: nv } : {}) }
+          return { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0, ...(nv ? { noteValue: nv } : {}) }
         }),
         melody,
       }
