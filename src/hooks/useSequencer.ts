@@ -324,10 +324,13 @@ export function useSequencer() {
     setState(s => ({ ...s, noteDuration }))
   }, [])
 
-  const addBar = useCallback(() => {
+  const addBar = useCallback((noteValue?: 1|2|4|8|16) => {
     setState(s => {
-      if (s.chords.length >= MAX_BARS) return s
-      const chords = [...s.chords, { root: null, suffix: null, positionIndex: 0 }]
+      const limit = s.pattern === 'strum' ? 128 : MAX_BARS
+      if (s.chords.length >= limit) return s
+      const slot: ChordSlot = { root: null, suffix: null, positionIndex: 0 }
+      if (noteValue && noteValue > 1) slot.noteValue = noteValue
+      const chords = [...s.chords, slot]
       const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
       chordsRef.current = chords
       melodyRef.current = melody

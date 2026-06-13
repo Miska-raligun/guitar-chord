@@ -10,8 +10,16 @@ interface Props {
   state: SequencerState
   onChordChange: (chordIdx: number, slot: ChordSlot) => void
   onMelodyChange: (bar: number, masterSlot: number, note: MelodyNote | null) => void
-  onAddBar?: () => void
+  onAddBar?: (noteValue?: 1|2|4|8|16) => void
 }
+
+const NV_ADD: { v: 1|2|4|8|16; label: string; title: string }[] = [
+  { v: 1,  label: '全',  title: '全音符（1小节）' },
+  { v: 2,  label: '½',   title: '二分音符（½小节）' },
+  { v: 4,  label: '♩',   title: '四分音符' },
+  { v: 8,  label: '♪',   title: '八分音符' },
+  { v: 16, label: '♬',   title: '十六分音符' },
+]
 
 interface ChordPickerTarget { chordIdx: number; slot: ChordSlot; isStrum: boolean }
 interface NotePickerTarget  { bar: number; masterSlot: number; note: MelodyNote | null }
@@ -157,18 +165,34 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           )
         })}
 
-        {/* Add bar */}
-        {onAddBar && (
+        {/* Add controls */}
+        {onAddBar && (isStrum ? (
+          <div className="col-span-4 pt-1">
+            <div className="text-[10px] text-zinc-600 mb-1.5">添加和弦</div>
+            <div className="flex gap-1.5">
+              {NV_ADD.map(({ v, label, title }) => (
+                <button
+                  key={v}
+                  title={title}
+                  onClick={() => onAddBar(v)}
+                  className="flex-1 h-10 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-amber-500/50 hover:bg-zinc-800 text-zinc-500 hover:text-amber-400 text-sm font-medium transition-all"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
           <div className="flex flex-col gap-1 min-w-0">
             <div className="text-[10px] text-center text-transparent">·</div>
             <button
-              onClick={onAddBar}
+              onClick={() => onAddBar()}
               className="w-full h-14 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xl font-light transition-all flex items-center justify-center"
             >
               +
             </button>
           </div>
-        )}
+        ))}
 
         {/* Spacer so grid can scroll above the open picker panel.
             Note picker in fretboard mode can be ~80vh tall, so give generous room. */}
