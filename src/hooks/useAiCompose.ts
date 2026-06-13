@@ -52,11 +52,13 @@ Schema:
     }
   ],
   "melody": [one array per chord event (same length as chords):
-    each array holds 8th-note slots for that chord event's duration:
-      noteValue=1 → 8 slots (4/4), 6 slots (3/4 or 6/8), 4 slots (2/4)
-      noteValue=2 → half of the above; noteValue=4 → quarter; noteValue=8 → 1 slot
-    each slot: {"semitone": <integer 0-11>, "dur": 1|2|4|8}|null
-      dur = note duration in 8th notes: 1=eighth(default), 2=quarter, 4=half, 8=whole
+    a sequential stream of note/rest events that play back-to-back and fill the chord event's duration.
+    each element:
+      {"semitone": <integer 0-11>, "dur": 16|8|4|2|1}   for a note
+      {"dur": 16|8|4|2|1}  (no semitone)  or  null      for a rest
+    dur = note-value DENOMINATOR (same idea as chord noteValue):
+      16=sixteenth, 8=eighth, 4=quarter, 2=half, 1=whole(one full bar)
+    The durations should sum to one full event: a 4/4 bar = 16 sixteenths = 8 eighths = 4 quarters, etc.
   ]
 }
 
@@ -78,12 +80,14 @@ PATTERN SELECTION — pick based on style:
   Example: 4 bars of pop-rock with quarter strums = 16 chord events, all noteValue=4
   Example: slow ballad strum = 4 chord events, all noteValue=1 (one strum per bar)
 
-MELODY dur usage — vary note lengths for interest:
-- dur=1 (eighth): fastest, use for rapid ornamental notes or eighth-note runs
-- dur=2 (quarter): standard melodic note, most common for lead lines
-- dur=4 (half): sustained melodic note, covers half a bar
-- dur=8 (whole): long held note spanning a full bar
-- Leave most slots null for simple chord accompaniment. Only add melody when the user asks for a melody/lead line.
+MELODY dur — note-value denominator, controls how LONG each melody note lasts (NOT pitch):
+- dur=16 (sixteenth): fast, busy runs — USE THIS whenever the user asks for 十六分音符 / sixteenth notes
+- dur=8 (eighth): common flowing melody (a good default)
+- dur=4 (quarter): steady, deliberate notes
+- dur=2 (half): sustained note over half a bar
+- dur=1 (whole): one long held note for the whole bar
+- A calm/slow mood can STILL use sixteenth notes — tempo (BPM) controls speed, dur controls note length. Honor explicit duration requests exactly: if the user demands sixteenth notes, every melody note must be dur=16.
+- Use null (or {"dur":n} with no semitone) for rests. Leave melody all-rests for pure chord accompaniment.
 
 BARS: if user specifies a bar count, aim for that many physical bars. In strum mode, chords.length = sum of events (may exceed bars when using noteValue<1).
 TONE: acoustic=folk/classical, electric+clean=jazz/pop/soul, electric+overdrive=rock/blues, electric+distortion=metal/punk
@@ -194,9 +198,14 @@ function parseComposition(raw: string, targetBars?: number): AiComposition {
   const chords = rawChords.slice(0, numChords)
   while (chords.length < numChords) chords.push({ root: null, suffix: null, positionIndex: 0 })
 
-  // Melody: one array per chord event, sequential slot placement with dur support
-  const masterPerBar  = getMasterSlotsPerBar(timeSig)  // 16 for 4/4
-  const eighthsPerBar = masterPerBar / 2                // 8 for 4/4
+  // Melody: one array per chord event, sequential note/rest placement.
+  // dur is a note-value denominator (16=sixteenth … 1=whole); convert to master slots.
+  const masterPerBar = getMasterSlotsPerBar(timeSig)  // 16 for 4/4
+  const VALID_DUR = [1, 2, 4, 8, 16]
+  const durToMaster = (d: number | undefined) => {
+    const denom = VALID_DUR.includes(d as number) ? (d as number) : 8 // default eighth note
+    return Math.max(1, Math.round(masterPerBar / denom))
+  }
 
   const melody: (MelodyNote | null)[][] = Array.isArray(obj.melody)
     ? obj.melody.slice(0, numChords).map((barArr: unknown, chordIdx: number) => {
@@ -209,17 +218,14 @@ function parseComposition(raw: string, targetBars?: number): AiComposition {
           let masterPos = 0
           for (const n of barArr as ({ semitone?: number; dur?: number } | null)[]) {
             if (masterPos >= maxMasterSlots) break
+            const span = Math.min(durToMaster(n?.dur), maxMasterSlots - masterPos)
             if (n && typeof n.semitone === 'number') {
-              const durIn8ths = Math.max(1, Math.min(8, Math.round(n.dur ?? 1)))
-              const masterDur = Math.min(durIn8ths * 2, maxMasterSlots - masterPos)
               master[masterPos] = {
                 semitone: Math.max(0, Math.min(11, n.semitone)),
-                duration: masterDur,
+                duration: span,
               }
-              masterPos += masterDur
-            } else {
-              masterPos += 2 // advance one 8th-note slot of silence
             }
+            masterPos += span
           }
         }
         return master
