@@ -56,6 +56,17 @@ export default function ComposeTab() {
 
   const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
 
+  // Local text buffer for the BPM input — lets the user type freely (e.g. clear
+  // the field, type "80") without each keystroke being clamped back into state.
+  const [bpmInput, setBpmInput] = useState(String(bpm))
+  useEffect(() => { setBpmInput(String(bpm)) }, [bpm])
+
+  function commitBpm() {
+    const n = Math.max(40, Math.min(200, Math.round(Number(bpmInput)) || bpm))
+    setBpm(n)
+    setBpmInput(String(n))
+  }
+
   // Keep metronome BPM/time-sig in sync silently
   useEffect(() => { metronome.syncBpm(bpm) }, [bpm])
   useEffect(() => { metronome.syncBpb(TS_BEATS[timeSig] ?? 4) }, [timeSig])
@@ -187,8 +198,10 @@ export default function ComposeTab() {
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">BPM</span>
           <input
-            type="number" min={40} max={200} value={bpm}
-            onChange={e => setBpm(Math.max(40, Math.min(200, Number(e.target.value))))}
+            type="number" min={40} max={200} value={bpmInput}
+            onChange={e => setBpmInput(e.target.value)}
+            onBlur={commitBpm}
+            onKeyDown={e => { if (e.key === 'Enter') commitBpm() }}
             className="w-14 bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none text-center focus:border-amber-500"
           />
         </div>
