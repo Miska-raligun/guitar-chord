@@ -47,6 +47,7 @@ export default function ComposeTab() {
   const [shareCopied, setShareCopied] = useState(false)
 
   const hasExistingContent = state.chords.some(c => c.root !== null)
+    || state.melody.some(row => row.some(n => n !== null))
 
   function openAiPanel() {
     // Default to 续写 when there's already something composed
