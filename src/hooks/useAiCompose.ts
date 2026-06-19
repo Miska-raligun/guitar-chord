@@ -8,27 +8,65 @@ const ROOT_NAMES_AI = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B']
 
 export interface ContinueFromState {
   chords: ChordSlot[]
+  melody: (MelodyNote | null)[][]
   bpm: number
   timeSig: TimeSig
   pattern: SequencerState['pattern']
   keyRoot: number
+  tone?: AiTone
 }
 
+// Render a melody row (master-slot array) into a compact "semitone:durDenom ..." stream.
+// Mirrors the run-length walk used by SequencerGrid's renderBarCells. Returns '' if all rests.
+function summarizeMelody(row: (MelodyNote | null)[], masterPerBar: number, maxSlots: number): string {
+  const parts: string[] = []
+  let pos = 0
+  let hasNote = false
+  while (pos < maxSlots) {
+    const note = row[pos]
+    if (note) {
+      hasNote = true
+      const span = Math.min(note.duration, maxSlots - pos)
+      parts.push(`${note.semitone}:${Math.max(1, Math.round(masterPerBar / span))}`)
+      pos += span
+    } else {
+      let end = maxSlots
+      for (let n = pos + 1; n < maxSlots; n++) { if (row[n]) { end = n; break } }
+      parts.push(`_:${Math.max(1, Math.round(masterPerBar / (end - pos)))}`)
+      pos = end
+    }
+  }
+  return hasNote ? parts.join(' ') : ''
+}
+
+const MAX_CONTEXT_EVENTS = 32
+
 function buildContinuationPrefix(ctx: ContinueFromState, targetBars: number | undefined): string {
-  const chordNames = ctx.chords
-    .map(c => {
-      if (!c.root) return '─'
-      const name = c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '')
-      return c.noteValue && c.noteValue > 1 ? `${name}(nv${c.noteValue})` : name
-    })
-    .join(' ')
+  const isStrum = ctx.pattern === 'strum'
+  const masterPerBar = getMasterSlotsPerBar(ctx.timeSig)
+  const total = ctx.chords.length
+  const startIdx = Math.max(0, total - MAX_CONTEXT_EVENTS)
+
+  const eventStrs = ctx.chords.slice(startIdx).map((c, i) => {
+    const idx = startIdx + i
+    const chordName = c.root ? c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '') : '─'
+    const nvTag = c.noteValue && c.noteValue > 1 ? `(nv${c.noteValue})` : ''
+    const maxSlots = isStrum ? Math.round(masterPerBar / (c.noteValue ?? 1)) : masterPerBar
+    const melodyStr = summarizeMelody(ctx.melody[idx] ?? [], masterPerBar, maxSlots)
+    return melodyStr ? `${chordName}${nvTag}[${melodyStr}]` : `${chordName}${nvTag}`
+  })
+
   const bars = targetBars ?? 8
   const key = ROOT_NAMES_AI[ctx.keyRoot]
   const patternName = { '53231323': 'folk', 'x3231323': 'muted folk', '3_12_3': 'classical', 'strum': 'strum' }[ctx.pattern] ?? ctx.pattern
-  return `[CONTINUATION MODE — append ~${bars} physical bars to the composition below. ` +
-    `Return ONLY the new chord events. Key: ${key}, BPM: ${ctx.bpm}, timeSig: ${ctx.timeSig}, pattern: ${ctx.pattern} (${patternName}). ` +
-    `Existing chord events (${ctx.chords.length}): ${chordNames || 'empty'}. ` +
-    `Continue with consistent style and pattern. User request follows:] `
+  const toneStr = ctx.tone ? `, tone: ${ctx.tone.mode}/${ctx.tone.effect}` : ''
+  const truncNote = startIdx > 0 ? ` (showing last ${MAX_CONTEXT_EVENTS} of ${total} events)` : ''
+
+  return `[CONTINUATION MODE — append ~${bars} physical bars directly after the existing composition below, picking up where it leaves off (do NOT restart the idea). ` +
+    `Return ONLY the new chord events. Key: ${key}, BPM: ${ctx.bpm}, timeSig: ${ctx.timeSig}, pattern: ${ctx.pattern} (${patternName})${toneStr}. ` +
+    `Existing events${truncNote}: ${eventStrs.join(' | ') || 'empty'}. ` +
+    `Notation per event: chord[semitone:durDenom ...] — semitone 0-11 (C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11), _ = rest, durDenom = note-value denominator (16=sixteenth..1=whole). ` +
+    `Match the existing melodic vocabulary (the actual pitches/intervals used), rhythmic density, and harmonic motion — extend it, don't generate a generic unrelated idea. User request follows:] `
 }
 
 const VALID_TIMSIGS = ['4/4', '3/4', '6/8', '2/4'] as const

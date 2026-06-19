@@ -18,7 +18,7 @@ import type { AiComposition, ContinueFromState } from '../../hooks/useAiCompose'
 import type { SavedComposition } from '../../types/compose'
 import type { SequencerState } from '../../types/audio'
 import { ROOTS } from '../../utils/dbUtils'
-import { setToneConfig } from '../../audio/toneConfig'
+import { setToneConfig, getToneConfig } from '../../audio/toneConfig'
 
 const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
   { id: '53231323', label: '民谣' },
@@ -109,12 +109,15 @@ export default function ComposeTab() {
   async function handleAiGenerate(targetBars?: number) {
     if (!aiPrompt.trim() || aiLoading) return
     const config = loadApiConfig()
+    const { mode, effect } = getToneConfig()
     const continueFrom: ContinueFromState | undefined = aiAppend ? {
       chords:  state.chords,
+      melody:  state.melody,
       bpm:     state.bpm,
       timeSig: state.timeSig,
       pattern: state.pattern,
       keyRoot: state.keyRoot,
+      tone:    { mode, effect },
     } : undefined
     const r = await generate(aiPrompt, config, targetBars, continueFrom)
     if (r) setAiResult(r)
