@@ -80,7 +80,6 @@ export default function ComposeTab() {
     const decoded = decodeShareUrl(s)
     if (!decoded) return
     applyComposition(decoded as AiComposition)
-    window.history.replaceState({}, '', window.location.pathname)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
