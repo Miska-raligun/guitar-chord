@@ -27,7 +27,8 @@ export default function BrowseTab() {
 
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
-  const currentPosition = positions[positionIndex] ?? null
+  const safePositionIndex = Math.min(positionIndex, Math.max(0, positions.length - 1))
+  const currentPosition = positions[safePositionIndex] ?? null
 
   const customConfig: CustomConfig = { steps: customSteps, timeSig: customTimeSig }
 
@@ -89,7 +90,7 @@ export default function BrowseTab() {
             />
             <PositionSelector
               total={positions.length}
-              current={positionIndex}
+              current={safePositionIndex}
               onChange={idx => { setPositionIndex(idx); stop() }}
             />
           </div>
