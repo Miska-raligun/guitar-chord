@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import type { MelodyNote } from '../../types/audio'
 import { pluckStringAt } from '../../audio/karplusStrong'
 import audioEngine from '../../audio/AudioEngine'
+import { SCALE_OPTIONS, type ScaleKey, SINGLE_DOTS, DOUBLE_DOTS, getNoteInfo } from '../../utils/fretboardUtils'
 
 // Standard tuning (low E → high e), index 0 = low E
 const STRINGS = [
@@ -13,36 +14,7 @@ const STRINGS = [
   { label: '①', name: 'e', openSemitone: 4,  freq: 329.63 },
 ]
 
-const SCALE_OPTIONS = [
-  { key: 'all',        label: '全部',     intervals: null as number[] | null },
-  { key: 'major',      label: '大调',     intervals: [0, 2, 4, 5, 7, 9, 11] },
-  { key: 'natMinor',   label: '自然小调',  intervals: [0, 2, 3, 5, 7, 8, 10] },
-  { key: 'majorPenta', label: '大调五声',  intervals: [0, 2, 4, 7, 9] },
-  { key: 'minorPenta', label: '小调五声',  intervals: [0, 3, 5, 7, 10] },
-  { key: 'blues',      label: '布鲁斯',   intervals: [0, 3, 5, 6, 7, 10] },
-]
-
-const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]
-const SOLFEGE = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si']
-const NUMS    = ['1',  '2',  '3',  '4',  '5',   '6',  '7']
-
-const SINGLE_DOTS = new Set([3, 5, 7, 9, 15, 17, 19, 21])
-const DOUBLE_DOTS = new Set([12, 24])
-
 const FRET_COLS = 25  // shows frets 0–24
-
-function getNoteInfo(semitone: number, keyRoot: number) {
-  const interval = (semitone - keyRoot + 12) % 12
-  const dIdx = MAJOR_INTERVALS.indexOf(interval)
-  if (dIdx !== -1) {
-    return { solfege: SOLFEGE[dIdx], num: NUMS[dIdx], isDiatonic: true, isRoot: interval === 0 }
-  }
-  let lowerIdx = 0
-  for (let i = MAJOR_INTERVALS.length - 1; i >= 0; i--) {
-    if (MAJOR_INTERVALS[i] < interval) { lowerIdx = i; break }
-  }
-  return { solfege: '♯' + SOLFEGE[lowerIdx], num: '♯' + NUMS[lowerIdx], isDiatonic: false, isRoot: false }
-}
 
 interface Props {
   keyRoot: number
@@ -52,7 +24,7 @@ interface Props {
 }
 
 export default function FretboardNotePicker({ keyRoot, noteDuration, selected, onSelect }: Props) {
-  const [scaleKey, setScaleKey]   = useState('all')
+  const [scaleKey, setScaleKey]   = useState<ScaleKey>('all')
   const [activeCell, setActiveCell] = useState<string | null>(null)
   const clearRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
