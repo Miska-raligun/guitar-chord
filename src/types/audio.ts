@@ -4,7 +4,7 @@ export interface ChordMatch {
   root: string
   suffix: string
   confidence: number
-  position: ChordPosition | null
+  positions: ChordPosition[]
 }
 
 // ─── 自定义节奏型步骤 ─────────────────────────────────────────

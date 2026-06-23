@@ -27,6 +27,6 @@ export function detectChords(chromagram: Float32Array, topN = 3): ChordMatch[] {
     root: NOTE_NAMES[r.root],
     suffix: r.suffix,
     confidence: r.score,
-    position: null,
+    positions: [],
   }))
 }
