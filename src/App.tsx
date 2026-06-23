@@ -7,8 +7,19 @@ import FretboardTab from './components/fretboard/FretboardTab'
 import ComposeTab from './components/compose/ComposeTab'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
+const TAB_KEY = 'guitar-chord-active-tab'
+const VALID_TABS: Tab[] = ['recognize', 'browse', 'fretboard', 'compose']
+
+function loadTab(): Tab {
+  try {
+    const s = localStorage.getItem(TAB_KEY)
+    if (s && VALID_TABS.includes(s as Tab)) return s as Tab
+  } catch { /* ignore */ }
+  return 'browse'
+}
+
 export default function App() {
-  const [tab,      setTab]      = useState<Tab>('browse')
+  const [tab,      setTab]      = useState<Tab>(loadTab)
   const [enterTab, setEnterTab] = useState<Tab | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -17,6 +28,7 @@ export default function App() {
     if (timerRef.current) clearTimeout(timerRef.current)
     setTab(next)
     setEnterTab(next)
+    try { localStorage.setItem(TAB_KEY, next) } catch { /* ignore */ }
     // Remove animation class after it finishes so it can replay on re-visit
     timerRef.current = setTimeout(() => setEnterTab(null), 300)
   }
