@@ -78,7 +78,7 @@ export function useRecognizer() {
         lastKeyRef.current = topKey
         const matches = rawMatches.map(m => ({
           ...m,
-          position: getChordEntry(m.root, m.suffix)?.positions[0] ?? null,
+          positions: getChordEntry(m.root, m.suffix)?.positions ?? [],
         }))
         setState(s => ({ ...s, matches }))
       }
@@ -95,6 +95,7 @@ export function useRecognizer() {
   }, [getChordEntry])
 
   const start = useCallback(async () => {
+    setState(s => s.error ? { ...s, error: null } : s)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       streamRef.current = stream
@@ -123,8 +124,15 @@ export function useRecognizer() {
 
       setState({ isListening: true, matches: [], error: null })
       intervalRef.current = setInterval(tick, DETECT_MS)
-    } catch {
-      setState(s => ({ ...s, error: '无法访问麦克风，请检查浏览器权限设置' }))
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : ''
+      const message =
+        name === 'NotAllowedError' || name === 'PermissionDeniedError'
+          ? '麦克风权限被拒绝，请在浏览器设置中允许访问后重试'
+          : name === 'NotFoundError'
+            ? '未检测到麦克风设备'
+            : '无法访问麦克风，请检查浏览器权限设置'
+      setState(s => ({ ...s, error: message }))
     }
   }, [tick])
 
