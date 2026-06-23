@@ -146,9 +146,26 @@ export interface AiComposition {
   tone?: AiTone
 }
 
+const REQUEST_TIMEOUT_MS = 50_000
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('请求超时，请检查网络连接或稍后重试')
+    }
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
   const url = `${config.baseUrl.replace(/\/$/, '')}/v1/chat/completions`
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -173,7 +190,7 @@ async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
 
 async function callAnthropic(prompt: string, config: ApiConfig): Promise<string> {
   const url = `${config.baseUrl.replace(/\/$/, '')}/v1/messages`
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
