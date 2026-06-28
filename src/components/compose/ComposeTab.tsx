@@ -34,7 +34,7 @@ type Panel = 'ai' | 'save' | 'library' | null
 export default function ComposeTab() {
   const {
     state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, loadComposition, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, addStrumPattern, removeLastBar, clearAll, loadComposition, transpose, play, stop,
   } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition, exportAll, importFrom } = useSavedCompositions()
   const { generate, isLoading: aiLoading, error: aiError, clearError: clearAiError } = useAiCompose()
@@ -316,6 +316,7 @@ export default function ComposeTab() {
           onChordChange={setChordSlot}
           onMelodyChange={setMelodyNote}
           onAddBar={addBar}
+          onAddStrumPattern={addStrumPattern}
         />
         {state.chords.every(c => c.root === null) && (
           <p className="text-center text-zinc-600 text-xs mt-8 px-8 leading-relaxed">

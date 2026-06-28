@@ -94,7 +94,8 @@ export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): v
     const noteValue     = slot.noteValue ?? 1
     const chordDurTicks = Math.round(ticksPerBar / noteValue)
 
-    if (slot.root && slot.suffix) {
+    // Muted (X) strums are percussive — skip their pitched chord notes
+    if (slot.root && slot.suffix && slot.strumDir !== 'X') {
       const root      = ROOT_SEMITONE[slot.root] ?? 0
       const intervals = CHORD_INTERVALS[slot.suffix] ?? CHORD_INTERVALS.major
       intervals.forEach((iv, i) => {

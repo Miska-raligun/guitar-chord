@@ -17,8 +17,9 @@ const SUFFIXES = [
 
 // ── compact types ────────────────────────────────────────────────────────────
 
-// Chord: null (whole-note empty) | [r,s] (whole-note) | [r,s,nv] (noteValue>1) | [-1,-1,nv] (empty w/ noteValue)
-type CChord = [number, number] | [number, number, number] | null
+// Chord: null (whole-note empty) | [r,s] (whole-note) | [r,s,nv] (noteValue>1) | [r,s,nv,dir] (strumDir≠D) | [-1,-1,nv] (empty w/ noteValue)
+// dir code: 1=U(up) 2=X(mute); down is default and omitted
+type CChord = [number, number] | [number, number, number] | [number, number, number, number] | null
 // Melody note: [bar, masterSlot, semitone, duration] or [bar, masterSlot, semitone, duration, string, fret]
 type CNote  = [number, number, number, number] | [number, number, number, number, number, number]
 
@@ -70,6 +71,8 @@ export function encodeShareUrl(state: SharePayload): string {
       const r = ROOTS.indexOf(slot.root as typeof ROOTS[number])
       const s = SUFFIXES.indexOf(slot.suffix as typeof SUFFIXES[number])
       if (r === -1 || s === -1) return nv > 1 ? [-1, -1, nv] as [number, number, number] : null
+      const dir = slot.strumDir === 'U' ? 1 : slot.strumDir === 'X' ? 2 : 0
+      if (dir !== 0) return [r, s, nv, dir] as [number, number, number, number]
       return nv > 1 ? [r, s, nv] as [number, number, number] : [r, s] as [number, number]
     }),
     m: [],
@@ -127,8 +130,10 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
         chords: rawChords.map(ch => {
           if (!ch) return { root: null, suffix: null, positionIndex: 0 }
           const nv = (ch.length >= 3 && ch[2] > 1) ? ch[2] as (1|2|4|8|16) : undefined
+          const dirCode = ch.length >= 4 ? ch[3] : 0
+          const strumDir = dirCode === 1 ? 'U' as const : dirCode === 2 ? 'X' as const : undefined
           if (ch[0] === -1) return { root: null, suffix: null, positionIndex: 0, ...(nv ? { noteValue: nv } : {}) }
-          return { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0, ...(nv ? { noteValue: nv } : {}) }
+          return { root: ROOTS[ch[0]] ?? 'C', suffix: SUFFIXES[ch[1]] ?? 'major', positionIndex: 0, ...(nv ? { noteValue: nv } : {}), ...(strumDir ? { strumDir } : {}) }
         }),
         melody,
       }

@@ -51,9 +51,10 @@ function buildContinuationPrefix(ctx: ContinueFromState, targetBars: number | un
     const idx = startIdx + i
     const chordName = c.root ? c.root + (c.suffix && c.suffix !== 'major' ? c.suffix : '') : '─'
     const nvTag = c.noteValue && c.noteValue > 1 ? `(nv${c.noteValue})` : ''
+    const dirTag = isStrum && c.strumDir && c.strumDir !== 'D' ? `(${c.strumDir})` : ''
     const maxSlots = isStrum ? Math.round(masterPerBar / (c.noteValue ?? 1)) : masterPerBar
     const melodyStr = summarizeMelody(ctx.melody[idx] ?? [], masterPerBar, maxSlots)
-    return melodyStr ? `${chordName}${nvTag}[${melodyStr}]` : `${chordName}${nvTag}`
+    return melodyStr ? `${chordName}${nvTag}${dirTag}[${melodyStr}]` : `${chordName}${nvTag}${dirTag}`
   })
 
   const bars = targetBars ?? 8
@@ -86,7 +87,8 @@ Schema:
       "root": "C"|"C#"|"D"|"Eb"|"E"|"F"|"F#"|"G"|"Ab"|"A"|"Bb"|"B"|null,
       "suffix": "major"|"minor"|"7"|"maj7"|"m7"|"sus2"|"sus4"|"dim"|"aug"|"add9"|null,
       "positionIndex": 0,
-      "noteValue": 1|2|4|8  (STRUM MODE ONLY — how long this chord lasts: 1=full bar, 2=half bar, 4=quarter note, 8=eighth note)
+      "noteValue": 1|2|4|8  (STRUM MODE ONLY — how long this chord lasts: 1=full bar, 2=half bar, 4=quarter note, 8=eighth note),
+      "strumDir": "D"|"U"|"X"  (STRUM MODE ONLY, optional — strum direction: D=down(default), U=up, X=muted/percussive)
     }
   ],
   "melody": [one array per chord event (same length as chords):
@@ -115,7 +117,11 @@ PATTERN SELECTION — pick based on style:
   • noteValue=4: quarter-note strums (standard pop/rock, 4 strums/bar — very common)
   • noteValue=8: eighth-note strums (fast, driving rhythm)
   Mix noteValues within bars for syncopation: e.g. [nv=2, nv=4, nv=4] fills one bar with half+quarter+quarter
+  Use strumDir for realistic rhythm: alternate D(down) on beats and U(up) on off-beats; use X for percussive muted hits.
+  • Common eighth pattern: events alternate strumDir D,U,D,U,… (all noteValue=8)
+  • Folk/pop feel: down on strong beats, up on weak beats, occasional X mute for groove
   Example: 4 bars of pop-rock with quarter strums = 16 chord events, all noteValue=4
+  Example: driving eighth strum = 8 events/bar, noteValue=8, strumDir alternating D/U
   Example: slow ballad strum = 4 chord events, all noteValue=1 (one strum per bar)
 
 MELODY dur — note-value denominator, controls how LONG each melody note lasts (NOT pitch):
@@ -228,15 +234,17 @@ function parseComposition(raw: string, targetBars?: number): AiComposition {
   // Parse chords with optional noteValue (strum mode only)
   const VALID_NV = [1, 2, 4, 8, 16] as const
   const rawChords: ChordSlot[] = Array.isArray(obj.chords)
-    ? obj.chords.map((c: { root?: string | null; suffix?: string | null; noteValue?: number }) => {
+    ? obj.chords.map((c: { root?: string | null; suffix?: string | null; noteValue?: number; strumDir?: string }) => {
         const nv = VALID_NV.includes(c.noteValue as 1|2|4|8|16)
           ? c.noteValue as (1|2|4|8|16)
           : undefined
+        const dir = (c.strumDir === 'U' || c.strumDir === 'X') ? c.strumDir : undefined
         return {
           root: c.root ?? null,
           suffix: c.suffix ?? null,
           positionIndex: 0,
           ...(isStrum && nv && nv > 1 ? { noteValue: nv } : {}),
+          ...(isStrum && dir ? { strumDir: dir } : {}),
         }
       })
     : []

@@ -19,29 +19,45 @@ const NOTE_VALUE_OPTIONS: { v: 1|2|4|8|16; label: string; title: string }[] = [
   { v: 16, label: '♬',   title: '十六分音符（1/16小节）' },
 ]
 
+const STRUM_DIR_OPTIONS: { v: 'D'|'U'|'X'; label: string; title: string }[] = [
+  { v: 'D', label: '↓', title: '下扫' },
+  { v: 'U', label: '↑', title: '上扫' },
+  { v: 'X', label: '✕', title: '闷音 / 切音' },
+]
+
 export default function ChordCellPicker({ slot, isStrum, onSelect, onClose }: Props) {
   const { suffixes } = useChordDb()
   const [root,      setRoot]      = useState(slot.root ?? 'C')
   const [suffix,    setSuffix]    = useState(slot.suffix ?? 'major')
   const [noteValue, setNoteValue] = useState<1|2|4|8|16>(slot.noteValue ?? 1)
+  const [strumDir,  setStrumDir]  = useState<'D'|'U'|'X'>(slot.strumDir ?? 'D')
 
-  function commit(r: string, s: string, nv: 1|2|4|8|16) {
-    onSelect({ root: r, suffix: s, positionIndex: 0, ...(nv > 1 ? { noteValue: nv } : {}) })
+  function commit(r: string, s: string, nv: 1|2|4|8|16, dir: 'D'|'U'|'X') {
+    onSelect({
+      root: r, suffix: s, positionIndex: 0,
+      ...(nv > 1 ? { noteValue: nv } : {}),
+      ...(isStrum && dir !== 'D' ? { strumDir: dir } : {}),
+    })
   }
 
   function handleRoot(r: string) {
     setRoot(r)
-    commit(r, suffix, noteValue)
+    commit(r, suffix, noteValue, strumDir)
   }
 
   function handleSuffix(s: string) {
     setSuffix(s)
-    commit(root, s, noteValue)
+    commit(root, s, noteValue, strumDir)
   }
 
   function handleNoteValue(nv: 1|2|4|8|16) {
     setNoteValue(nv)
-    commit(root, suffix, nv)
+    commit(root, suffix, nv, strumDir)
+  }
+
+  function handleStrumDir(dir: 'D'|'U'|'X') {
+    setStrumDir(dir)
+    commit(root, suffix, noteValue, dir)
   }
 
   return (
@@ -66,25 +82,46 @@ export default function ChordCellPicker({ slot, isStrum, onSelect, onClose }: Pr
           </div>
         </div>
 
-        {/* Note value selector — strum mode only */}
+        {/* Note value + strum direction selectors — strum mode only */}
         {isStrum && (
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs text-zinc-500 shrink-0">时值</span>
-            <div className="flex rounded-lg overflow-hidden border border-zinc-700">
-              {NOTE_VALUE_OPTIONS.map(({ v, label, title }) => (
-                <button
-                  key={v}
-                  title={title}
-                  onClick={() => handleNoteValue(v)}
-                  className={`px-3 py-1.5 text-xs transition-colors ${
-                    noteValue === v
-                      ? 'bg-amber-500 text-zinc-950 font-semibold'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500 shrink-0">时值</span>
+              <div className="flex rounded-lg overflow-hidden border border-zinc-700">
+                {NOTE_VALUE_OPTIONS.map(({ v, label, title }) => (
+                  <button
+                    key={v}
+                    title={title}
+                    onClick={() => handleNoteValue(v)}
+                    className={`px-3 py-1.5 text-xs transition-colors ${
+                      noteValue === v
+                        ? 'bg-amber-500 text-zinc-950 font-semibold'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500 shrink-0">扫法</span>
+              <div className="flex rounded-lg overflow-hidden border border-zinc-700">
+                {STRUM_DIR_OPTIONS.map(({ v, label, title }) => (
+                  <button
+                    key={v}
+                    title={title}
+                    onClick={() => handleStrumDir(v)}
+                    className={`px-3 py-1.5 text-sm transition-colors ${
+                      strumDir === v
+                        ? 'bg-amber-500 text-zinc-950 font-semibold'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

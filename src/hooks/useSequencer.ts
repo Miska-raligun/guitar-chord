@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { pluckStringAt, stopAllNodes } from '../audio/karplusStrong'
+import { pluckStringAt, strumMutedAt, stopAllNodes } from '../audio/karplusStrong'
 import audioEngine from '../audio/AudioEngine'
 import { OPEN_STRING_FREQS } from '../types/chord'
 import type { ChordPosition } from '../types/chord'
@@ -16,6 +16,7 @@ const MUTE_BASS  = -11
 const REST       = -20
 const STRUM_DOWN = -30
 const STRUM_UP   = -31
+const STRUM_MUTE = -32
 
 const PATTERN_53231323: PatternStep[] = [BASS,      3, 4, 3, 5, 3, 4, 3]
 const PATTERN_X3231323: PatternStep[] = [MUTE_BASS, 3, 4, 3, 5, 3, 4, 3]
@@ -134,6 +135,11 @@ export function useSequencer() {
   const scheduleStep = useCallback((step: PatternStep, time: number, isBass: boolean, pos: ChordPosition) => {
     if (step === REST) return
 
+    if (step === STRUM_MUTE) {
+      strumMutedAt(pos, time)
+      return
+    }
+
     if (step === STRUM_DOWN || step === STRUM_UP) {
       const strings = step === STRUM_DOWN ? [0,1,2,3,4,5] : [5,4,3,2,1,0]
       const dps = SWEEP_DUR / 5
@@ -217,9 +223,11 @@ export function useSequencer() {
       }
 
       if (isStrum) {
-        // Strum: one sweep per chord event
+        // Strum: one sweep per chord event, direction per slot (down/up/mute)
         if (posInChord === 0 && posRef.current) {
-          scheduleStep(STRUM_DOWN, nextTimeRef.current, true, posRef.current)
+          const dir = chords[chordIdx].strumDir ?? 'D'
+          const strumStep = dir === 'U' ? STRUM_UP : dir === 'X' ? STRUM_MUTE : STRUM_DOWN
+          scheduleStep(strumStep, nextTimeRef.current, true, posRef.current)
         }
       } else {
         // Fingerpicking / arpeggio: regular steps within the bar
@@ -338,6 +346,21 @@ export function useSequencer() {
     })
   }, [])
 
+  // Append multiple strum chord events at once (used by preset rhythm patterns)
+  const addStrumPattern = useCallback((slots: ChordSlot[]) => {
+    setState(s => {
+      if (s.pattern !== 'strum') return s
+      const room = 128 - s.chords.length
+      const toAdd = slots.slice(0, Math.max(0, room))
+      if (toAdd.length === 0) return s
+      const chords = [...s.chords, ...toAdd]
+      const melody = [...s.melody, ...toAdd.map(() => Array(MASTER_SLOTS).fill(null))]
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
   const removeLastBar = useCallback(() => {
     setState(s => {
       if (s.chords.length <= 1) return s
@@ -427,6 +450,6 @@ export function useSequencer() {
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, addStrumPattern, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
   }
 }

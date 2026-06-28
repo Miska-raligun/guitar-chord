@@ -42,6 +42,7 @@ export interface ChordSlot {
   suffix: string | null
   positionIndex: number
   noteValue?: 1 | 2 | 4 | 8 | 16  // strum 模式时值分母：1=全音符(1小节), 2=半, 4=四分, 8=八分, 16=十六分
+  strumDir?: 'D' | 'U' | 'X'      // strum 模式扫弦方向：D=下扫(默认), U=上扫, X=闷音/切音
 }
 
 export interface MelodyNote {
