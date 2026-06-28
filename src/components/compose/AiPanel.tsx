@@ -16,6 +16,8 @@ const BAR_OPTIONS = [
   { val: 32, label: '32' },
 ]
 
+type AiMode = 'new' | 'append' | 'fill'
+
 interface Props {
   onGenerate: (result: AiComposition) => void
   onClose: () => void
@@ -28,8 +30,9 @@ interface Props {
   onClearError: () => void
   onTriggerGenerate: (targetBars?: number) => void
   hasExistingContent: boolean
-  aiAppend: boolean
-  onAiAppendChange: (v: boolean) => void
+  hasChords: boolean
+  aiMode: AiMode
+  onAiModeChange: (m: AiMode) => void
 }
 
 export default function AiPanel({
@@ -38,8 +41,8 @@ export default function AiPanel({
   result, onResultClear,
   isLoading, error, onClearError,
   onTriggerGenerate,
-  hasExistingContent,
-  aiAppend, onAiAppendChange,
+  hasExistingContent, hasChords,
+  aiMode, onAiModeChange,
 }: Props) {
   const [showConfig, setShowConfig] = useState(false)
   const [barTarget, setBarTarget]   = useState(0)
@@ -47,6 +50,8 @@ export default function AiPanel({
   if (showConfig) return <ApiConfigModal onClose={() => setShowConfig(false)} />
 
   const melodyCount = result ? result.melody.flat().filter(Boolean).length : 0
+  const isAppend = aiMode === 'append'
+  const isFill   = aiMode === 'fill'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
@@ -60,8 +65,11 @@ export default function AiPanel({
             <div className="flex items-center gap-2">
               <IconWand className="w-4 h-4 text-amber-400" />
               <span className="text-sm font-semibold text-zinc-100">AI 创作</span>
-              {aiAppend && (
+              {isAppend && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30">续写</span>
+              )}
+              {isFill && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">配旋律</span>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -95,7 +103,8 @@ export default function AiPanel({
                     (result.tone.mode === 'acoustic' ? '木吉他' : '电吉他') + '·' +
                     (result.tone.effect === 'clean' ? '清音' : result.tone.effect === 'overdrive' ? '过载' : '失真'),
                   ] : []),
-                  ...(aiAppend ? ['续写模式'] : []),
+                  ...(isAppend ? ['续写模式'] : []),
+                  ...(isFill ? ['配旋律模式'] : []),
                 ].map(tag => (
                   <span key={tag} className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[11px] font-medium">
                     {tag}
@@ -139,33 +148,47 @@ export default function AiPanel({
                   onClick={() => { onGenerate(result); onResultClear() }}
                   className="flex-1 py-2.5 rounded-xl bg-amber-500 text-zinc-950 font-semibold text-sm hover:bg-amber-400"
                 >
-                  ✓ {aiAppend ? '追加到编曲' : '应用到编曲'}
+                  ✓ {isAppend ? '追加到编曲' : isFill ? '应用旋律' : '应用到编曲'}
                 </button>
               </div>
             </div>
           ) : (
             /* ── Input / Loading ── */
             <div>
-              {/* Continuation toggle */}
+              {/* Mode toggle */}
               {hasExistingContent && (
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className="text-xs text-zinc-500">模式</span>
                   <div className="flex rounded-lg overflow-hidden border border-zinc-700">
                     <button
-                      onClick={() => onAiAppendChange(false)}
+                      onClick={() => onAiModeChange('new')}
                       className={`px-3 py-1.5 text-xs transition-colors ${
-                        !aiAppend ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                        aiMode === 'new' ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                       }`}
                     >
                       新建编曲
                     </button>
                     <button
-                      onClick={() => onAiAppendChange(true)}
-                      className={`px-3 py-1.5 text-xs transition-colors ${
-                        aiAppend ? 'bg-blue-500 text-white font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      onClick={() => onAiModeChange('append')}
+                      className={`px-3 py-1.5 text-xs transition-colors border-l border-zinc-700 ${
+                        aiMode === 'append' ? 'bg-blue-500 text-white font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                       }`}
                     >
                       续写当前
+                    </button>
+                    <button
+                      onClick={() => hasChords && onAiModeChange('fill')}
+                      disabled={!hasChords}
+                      title={hasChords ? '为已有和弦配上旋律' : '请先添加和弦'}
+                      className={`px-3 py-1.5 text-xs transition-colors border-l border-zinc-700 ${
+                        aiMode === 'fill'
+                          ? 'bg-emerald-500 text-white font-semibold'
+                          : hasChords
+                            ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                            : 'bg-zinc-800 text-zinc-700 cursor-not-allowed'
+                      }`}
+                    >
+                      配旋律
                     </button>
                   </div>
                 </div>
@@ -174,17 +197,24 @@ export default function AiPanel({
               <textarea
                 value={prompt}
                 onChange={e => { onPromptChange(e.target.value); onClearError() }}
-                placeholder={aiAppend
+                placeholder={isAppend
                   ? '描述续写要求，例如：加入副歌部分，更有力度，BPM 保持不变...'
-                  : '描述你想要的风格，例如：C 大调舒缓民谣，BPM 70，带旋律...&#10;也可指定拍号：6/8 拍圆舞曲、3/4 拍爵士...'}
+                  : isFill
+                    ? '描述旋律风格，例如：在现有和弦下配一条舒缓的主旋律，多用十六分音符...'
+                    : '描述你想要的风格，例如：C 大调舒缓民谣，BPM 70，带旋律...&#10;也可指定拍号：6/8 拍圆舞曲、3/4 拍爵士...'}
                 rows={3}
                 disabled={isLoading}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 resize-none mb-3 placeholder:text-zinc-600 disabled:opacity-50"
               />
 
-              {/* Bar count selector */}
+              {/* Bar count selector — not applicable in fill mode (chords are fixed) */}
+              {isFill ? (
+                <div className="text-[11px] text-zinc-500 bg-zinc-800/60 border border-zinc-700 rounded-xl px-3 py-2 mb-3 leading-relaxed">
+                  保持现有和弦与设置不变，仅在其下方生成旋律
+                </div>
+              ) : (
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-zinc-500 shrink-0">{aiAppend ? '续写小节' : '小节数'}</span>
+                <span className="text-xs text-zinc-500 shrink-0">{isAppend ? '续写小节' : '小节数'}</span>
                 <div className="flex rounded-lg overflow-hidden border border-zinc-700">
                   {BAR_OPTIONS.map(o => (
                     <button
@@ -201,6 +231,7 @@ export default function AiPanel({
                   ))}
                 </div>
               </div>
+              )}
 
               {error && (
                 <div className="text-xs text-red-400 bg-red-400/10 border border-red-400/30 rounded-xl px-3 py-2 mb-3 leading-relaxed">
@@ -209,18 +240,20 @@ export default function AiPanel({
               )}
 
               <button
-                onClick={() => onTriggerGenerate(barTarget > 0 ? barTarget : undefined)}
+                onClick={() => onTriggerGenerate(isFill ? undefined : (barTarget > 0 ? barTarget : undefined))}
                 disabled={isLoading || !prompt.trim()}
                 className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${
                   isLoading || !prompt.trim()
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                    : aiAppend
+                    : isAppend
                       ? 'bg-blue-500 text-white hover:bg-blue-400'
-                      : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
+                      : isFill
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-400'
+                        : 'bg-amber-500 text-zinc-950 hover:bg-amber-400'
                 }`}
               >
                 <IconWand className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                {isLoading ? '生成中，请稍候...' : aiAppend ? '续写编曲' : '生成编曲'}
+                {isLoading ? '生成中，请稍候...' : isAppend ? '续写编曲' : isFill ? '生成旋律' : '生成编曲'}
               </button>
             </div>
           )}

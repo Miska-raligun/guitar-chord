@@ -43,15 +43,17 @@ export default function ComposeTab() {
   const [panel,     setPanel]     = useState<Panel>(null)
   const [aiPrompt,  setAiPrompt]  = useState('')
   const [aiResult,  setAiResult]  = useState<AiComposition | null>(null)
-  const [aiAppend,  setAiAppend]  = useState(false)
+  const [aiMode,    setAiMode]    = useState<'new' | 'append' | 'fill'>('new')
   const [shareCopied, setShareCopied] = useState(false)
 
-  const hasExistingContent = state.chords.some(c => c.root !== null)
+  const hasChords = state.chords.some(c => c.root !== null)
+  const hasExistingContent = hasChords
     || state.melody.some(row => row.some(n => n !== null))
 
   function openAiPanel() {
     // Default to 续写 when there's already something composed
-    if (hasExistingContent) setAiAppend(true)
+    if (hasExistingContent) setAiMode('append')
+    else setAiMode('new')
     setPanel('ai')
   }
 
@@ -83,8 +85,8 @@ export default function ComposeTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function applyComposition(src: AiComposition | SavedComposition, append = false) {
-    if (append) {
+  function applyComposition(src: AiComposition | SavedComposition, mode: 'new' | 'append' | 'fill' = 'new') {
+    if (mode === 'append') {
       const newChords = [...state.chords, ...src.chords]
       const newMelody = [...state.melody, ...src.melody]
       loadComposition(newChords, newMelody, {
@@ -94,6 +96,13 @@ export default function ComposeTab() {
         timeSig: src.timeSig,
       })
       if ('tone' in src && src.tone) setToneConfig(src.tone)
+    } else if (mode === 'fill') {
+      // Keep the existing chords / settings untouched; overlay the generated
+      // melody onto the matching bars (by index).
+      const newMelody = state.chords.map((_, i) =>
+        src.melody[i] ?? state.melody[i] ?? Array(16).fill(null)
+      )
+      loadComposition(state.chords, newMelody)
     } else {
       loadComposition(src.chords, src.melody, {
         bpm:          src.bpm,
@@ -110,7 +119,7 @@ export default function ComposeTab() {
     if (!aiPrompt.trim() || aiLoading) return
     const config = loadApiConfig()
     const { mode, effect } = getToneConfig()
-    const continueFrom: ContinueFromState | undefined = aiAppend ? {
+    const continueFrom: ContinueFromState | undefined = aiMode !== 'new' ? {
       chords:  state.chords,
       melody:  state.melody,
       bpm:     state.bpm,
@@ -118,6 +127,7 @@ export default function ComposeTab() {
       pattern: state.pattern,
       keyRoot: state.keyRoot,
       tone:    { mode, effect },
+      fillMelody: aiMode === 'fill',
     } : undefined
     const r = await generate(aiPrompt, config, targetBars, continueFrom)
     if (r) setAiResult(r)
@@ -362,7 +372,7 @@ export default function ComposeTab() {
       {/* ── Panels ── */}
       {panel === 'ai' && (
         <AiPanel
-          onGenerate={(result) => { applyComposition(result, aiAppend); setAiResult(null); setPanel(null) }}
+          onGenerate={(result) => { applyComposition(result, aiMode); setAiResult(null); setPanel(null) }}
           onClose={() => setPanel(null)}
           prompt={aiPrompt}
           onPromptChange={setAiPrompt}
@@ -373,8 +383,9 @@ export default function ComposeTab() {
           onClearError={clearAiError}
           onTriggerGenerate={handleAiGenerate}
           hasExistingContent={hasExistingContent}
-          aiAppend={aiAppend}
-          onAiAppendChange={setAiAppend}
+          hasChords={hasChords}
+          aiMode={aiMode}
+          onAiModeChange={setAiMode}
         />
       )}
       {panel === 'save' && (

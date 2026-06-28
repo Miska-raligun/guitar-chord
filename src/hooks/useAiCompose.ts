@@ -14,6 +14,7 @@ export interface ContinueFromState {
   pattern: SequencerState['pattern']
   keyRoot: number
   tone?: AiTone
+  fillMelody?: boolean   // true = keep chords fixed, only generate a melody under them
 }
 
 // Render a melody row (master-slot array) into a compact "semitone:durDenom ..." stream.
@@ -62,11 +63,22 @@ function buildContinuationPrefix(ctx: ContinueFromState, targetBars: number | un
   const patternName = { '53231323': 'folk', 'x3231323': 'muted folk', '3_12_3': 'classical', 'strum': 'strum' }[ctx.pattern] ?? ctx.pattern
   const toneStr = ctx.tone ? `, tone: ${ctx.tone.mode}/${ctx.tone.effect}` : ''
   const truncNote = startIdx > 0 ? ` (showing last ${MAX_CONTEXT_EVENTS} of ${total} events)` : ''
+  const notation = `Notation per event: chord[semitone:durDenom ...] — semitone 0-11 (C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11), _ = rest, durDenom = note-value denominator (16=sixteenth..1=whole).`
+
+  if (ctx.fillMelody) {
+    return `[FILL-MELODY MODE — the chord progression below is FIXED and final. Do NOT add, remove, reorder, or change any chord. ` +
+      `Your job: compose ONLY a melody line that fits UNDER these exact chords. ` +
+      `Return the chords array IDENTICAL to the existing one (same length ${total}, same root/suffix/noteValue/strumDir in the same order), ` +
+      `and a melody array with exactly one entry per chord event (melody.length MUST equal ${total}). ` +
+      `Key: ${key}, BPM: ${ctx.bpm}, timeSig: ${ctx.timeSig}, pattern: ${ctx.pattern} (${patternName})${toneStr} — all fixed, do not change. ` +
+      `Existing events${truncNote}: ${eventStrs.join(' | ') || 'empty'}. ${notation} ` +
+      `Write a singable, musically coherent melody whose notes belong to / resolve against each underlying chord, following the user's request. User request follows:] `
+  }
 
   return `[CONTINUATION MODE — append ~${bars} physical bars directly after the existing composition below, picking up where it leaves off (do NOT restart the idea). ` +
     `Return ONLY the new chord events. Key: ${key}, BPM: ${ctx.bpm}, timeSig: ${ctx.timeSig}, pattern: ${ctx.pattern} (${patternName})${toneStr}. ` +
     `Existing events${truncNote}: ${eventStrs.join(' | ') || 'empty'}. ` +
-    `Notation per event: chord[semitone:durDenom ...] — semitone 0-11 (C=0 C#=1 D=2 Eb=3 E=4 F=5 F#=6 G=7 Ab=8 A=9 Bb=10 B=11), _ = rest, durDenom = note-value denominator (16=sixteenth..1=whole). ` +
+    `${notation} ` +
     `Match the existing melodic vocabulary (the actual pitches/intervals used), rhythmic density, and harmonic motion — extend it, don't generate a generic unrelated idea. User request follows:] `
 }
 
@@ -320,8 +332,10 @@ export function useAiCompose() {
     }
     setIsLoading(true)
     setError(null)
-    const bars = targetBars ?? (continueFrom ? 8 : undefined)
-    const barPrefix = bars ? `[目标：约 ${bars} 个物理小节。在 strum 模式下，若使用 noteValue=4，则 chords 约需 ${bars * 4} 项] ` : ''
+    const isFill = continueFrom?.fillMelody === true
+    // Fill-melody mode keeps the existing chords, so no bar target applies.
+    const bars = isFill ? undefined : (targetBars ?? (continueFrom ? 8 : undefined))
+    const barPrefix = (!isFill && bars) ? `[目标：约 ${bars} 个物理小节。在 strum 模式下，若使用 noteValue=4，则 chords 约需 ${bars * 4} 项] ` : ''
     const contPrefix = continueFrom ? buildContinuationPrefix(continueFrom, bars) : ''
     const userMsg = contPrefix + barPrefix + prompt
     try {
