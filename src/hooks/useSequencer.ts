@@ -361,6 +361,21 @@ export function useSequencer() {
     })
   }, [])
 
+  // Replace a single chord slot with a full bar of strum events (rhythm-fill from the picker)
+  const fillBarAt = useCallback((chordIdx: number, slots: ChordSlot[]) => {
+    setState(s => {
+      if (chordIdx < 0 || chordIdx >= s.chords.length || slots.length === 0) return s
+      // Respect the strum-mode slot cap (net change = slots.length - 1)
+      if (s.chords.length - 1 + slots.length > 128) return s
+      const chords = [...s.chords.slice(0, chordIdx), ...slots, ...s.chords.slice(chordIdx + 1)]
+      const rows = slots.map(() => Array(MASTER_SLOTS).fill(null))
+      const melody = [...s.melody.slice(0, chordIdx), ...rows, ...s.melody.slice(chordIdx + 1)]
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
   const removeLastBar = useCallback(() => {
     setState(s => {
       if (s.chords.length <= 1) return s
@@ -450,6 +465,6 @@ export function useSequencer() {
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, addStrumPattern, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, addStrumPattern, fillBarAt, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
   }
 }

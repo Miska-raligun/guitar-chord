@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import RootSelector from '../browse/RootSelector'
 import SuffixSelector from '../browse/SuffixSelector'
-import type { ChordSlot } from '../../types/audio'
+import type { ChordSlot, TimeSig } from '../../types/audio'
 import { useChordDb } from '../../hooks/useChordDb'
+import { STRUM_PRESETS, eighthsPerBar, buildPatternSlots } from '../../data/strumPatterns'
 
 interface Props {
   slot: ChordSlot
   isStrum: boolean
+  timeSig: TimeSig
   onSelect: (slot: ChordSlot) => void
+  onFillBar?: (slots: ChordSlot[]) => void
   onClose: () => void
 }
 
@@ -25,7 +28,7 @@ const STRUM_DIR_OPTIONS: { v: 'D'|'U'|'X'; label: string; title: string }[] = [
   { v: 'X', label: '✕', title: '闷音 / 切音' },
 ]
 
-export default function ChordCellPicker({ slot, isStrum, onSelect, onClose }: Props) {
+export default function ChordCellPicker({ slot, isStrum, timeSig, onSelect, onFillBar, onClose }: Props) {
   const { suffixes } = useChordDb()
   const [root,      setRoot]      = useState(slot.root ?? 'C')
   const [suffix,    setSuffix]    = useState(slot.suffix ?? 'major')
@@ -122,6 +125,29 @@ export default function ChordCellPicker({ slot, isStrum, onSelect, onClose }: Pr
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rhythm-fill — turn this cell into a whole bar of the chosen chord strummed in a preset pattern */}
+        {isStrum && onFillBar && (
+          <div className="mb-3">
+            <div className="text-xs text-zinc-500 mb-1.5">整小节节奏型（用当前和弦一键铺满本小节）</div>
+            <div className="flex gap-1.5">
+              {STRUM_PRESETS.map(({ key, label, title, build }) => (
+                <button
+                  key={key}
+                  title={title}
+                  onClick={() => {
+                    onFillBar(buildPatternSlots(root, suffix, build(eighthsPerBar(timeSig))))
+                    onClose()
+                  }}
+                  className="flex-1 h-10 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-amber-500/50 hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 text-[11px] font-medium transition-all flex flex-col items-center justify-center leading-tight"
+                >
+                  <span>{title}</span>
+                  <span className="text-[9px] text-zinc-600">{label}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}

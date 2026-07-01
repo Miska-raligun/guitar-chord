@@ -5,6 +5,7 @@ import ChordCellPicker from './ChordCellPicker'
 import NotePicker from './NotePicker'
 import { SOLFEGE } from './NotePicker'
 import { STRING_LABELS } from './FretboardNotePicker'
+import { STRUM_PRESETS, eighthsPerBar, buildPatternSlots } from '../../data/strumPatterns'
 
 interface Props {
   state: SequencerState
@@ -12,6 +13,7 @@ interface Props {
   onMelodyChange: (bar: number, masterSlot: number, note: MelodyNote | null) => void
   onAddBar?: (noteValue?: 1|2|4|8|16) => void
   onAddStrumPattern?: (slots: ChordSlot[]) => void
+  onFillBarAt?: (chordIdx: number, slots: ChordSlot[]) => void
 }
 
 const NV_ADD: { v: 1|2|4|8|16; label: string; title: string }[] = [
@@ -24,25 +26,6 @@ const NV_ADD: { v: 1|2|4|8|16; label: string; title: string }[] = [
 
 // 扫弦方向显示符号
 const DIR_GLYPH: Record<'D'|'U'|'X', string> = { D: '↓', U: '↑', X: '✕' }
-
-// 常见扫弦节奏型：每个 strike 为一个八分音符 D=下 U=上 X=闷音 -=休止
-type Strike = 'D' | 'U' | 'X' | '-'
-function cyc(motif: Strike[], n: number): Strike[] {
-  return Array.from({ length: n }, (_, i) => motif[i % motif.length])
-}
-const STRUM_PRESETS: { key: string; label: string; title: string; build: (eighths: number) => Strike[] }[] = [
-  { key: 'q-down', label: '↓↓↓↓',      title: '四分下扫', build: n => Array.from({ length: n }, (_, i) => (i % 2 === 0 ? 'D' : '-')) },
-  { key: 'e-alt',  label: '↓↑↓↑',      title: '八分下上', build: n => Array.from({ length: n }, (_, i) => (i % 2 === 0 ? 'D' : 'U')) },
-  { key: 'folk',   label: '↓ ↓↑ ↑↓↑', title: '民谣节奏', build: n => cyc(['D', '-', 'D', 'U', '-', 'U', 'D', 'U'], n) },
-  { key: 'mute',   label: '↓✕↓↑✕↑',   title: '切音节奏', build: n => cyc(['D', 'X', 'D', 'U', 'X', 'U', 'D', 'U'], n) },
-]
-
-// 每小节的八分音符数（决定节奏型长度）
-function eighthsPerBar(timeSig: SequencerState['timeSig']): number {
-  if (timeSig === '4/4') return 8
-  if (timeSig === '3/4' || timeSig === '6/8') return 6
-  return 4  // 2/4
-}
 
 // 取序列中最后一个有效和弦作为节奏型填充的默认和弦
 function lastChord(chords: ChordSlot[]): { root: string; suffix: string } {
@@ -104,7 +87,7 @@ function computeBarNumbers(chords: ChordSlot[]): number[] {
   })
 }
 
-export default function SequencerGrid({ state, onChordChange, onMelodyChange, onAddBar, onAddStrumPattern }: Props) {
+export default function SequencerGrid({ state, onChordChange, onMelodyChange, onAddBar, onAddStrumPattern, onFillBarAt }: Props) {
   const [chordPicker, setChordPicker] = useState<ChordPickerTarget | null>(null)
   const [notePicker,  setNotePicker]  = useState<NotePickerTarget | null>(null)
 
@@ -214,12 +197,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
                       onClick={() => {
                         const { root, suffix } = lastChord(chords)
                         const strikes = build(eighthsPerBar(timeSig))
-                        const slots: ChordSlot[] = strikes.map(st =>
-                          st === '-'
-                            ? { root: null, suffix: null, positionIndex: 0, noteValue: 8 }
-                            : { root, suffix, positionIndex: 0, noteValue: 8, ...(st !== 'D' ? { strumDir: st } : {}) }
-                        )
-                        onAddStrumPattern(slots)
+                        onAddStrumPattern(buildPatternSlots(root, suffix, strikes))
                       }}
                       className="flex-1 h-10 rounded-lg border border-dashed border-zinc-700 bg-zinc-900 hover:border-amber-500/50 hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 text-[11px] font-medium transition-all flex flex-col items-center justify-center leading-tight"
                     >
@@ -270,7 +248,9 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           key={chordPicker.chordIdx}
           slot={chordPicker.slot}
           isStrum={chordPicker.isStrum}
+          timeSig={timeSig}
           onSelect={slot => onChordChange(chordPicker.chordIdx, slot)}
+          onFillBar={onFillBarAt ? slots => onFillBarAt(chordPicker.chordIdx, slots) : undefined}
           onClose={() => setChordPicker(null)}
         />
       )}
