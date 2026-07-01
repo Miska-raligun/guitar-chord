@@ -376,6 +376,43 @@ export function useSequencer() {
     })
   }, [])
 
+  // Split (or merge) the bar starting at firstChordIdx into `noteValue` uniform
+  // strum slots (each noteValue=N, N of them exactly fill one bar). The bar's
+  // primary chord + strum direction are carried into every new slot; that bar's
+  // melody rows are reset.
+  const setBarSubdivision = useCallback((firstChordIdx: number, noteValue: 1|2|4|8|16) => {
+    setState(s => {
+      if (s.pattern !== 'strum') return s
+      if (firstChordIdx < 0 || firstChordIdx >= s.chords.length) return s
+      const masterPerBar = getMasterSlotsPerBar(s.timeSig)
+      // Find the slot range [firstChordIdx, end) that makes up this bar.
+      let acc = 0
+      let end = firstChordIdx
+      while (end < s.chords.length && acc < masterPerBar) {
+        acc += getChordMasterDuration(s.chords[end], s.timeSig)
+        end++
+      }
+      const barSlots = s.chords.slice(firstChordIdx, end)
+      const primary = barSlots.find(c => c.root && c.suffix) ?? barSlots[0]
+      const dir = primary.strumDir
+      const count = noteValue  // N slots of noteValue=N fill exactly one bar
+      const newSlots: ChordSlot[] = Array.from({ length: count }, () => ({
+        root: primary.root,
+        suffix: primary.suffix,
+        positionIndex: 0,
+        ...(noteValue > 1 ? { noteValue } : {}),
+        ...(dir && dir !== 'D' ? { strumDir: dir } : {}),
+      }))
+      const chords = [...s.chords.slice(0, firstChordIdx), ...newSlots, ...s.chords.slice(end)]
+      if (chords.length > 128) return s
+      const rows = newSlots.map(() => Array(MASTER_SLOTS).fill(null))
+      const melody = [...s.melody.slice(0, firstChordIdx), ...rows, ...s.melody.slice(end)]
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
   const removeLastBar = useCallback(() => {
     setState(s => {
       if (s.chords.length <= 1) return s
@@ -465,6 +502,6 @@ export function useSequencer() {
   return {
     state,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, addStrumPattern, fillBarAt, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, addStrumPattern, fillBarAt, setBarSubdivision, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
   }
 }
