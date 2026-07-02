@@ -6,15 +6,17 @@ import { prettifySuffix } from '../../utils/dbUtils'
 import { NOTE_NAMES } from '../../utils/noteUtils'
 import { OPEN_STRING_FREQS } from '../../types/chord'
 
-const MAX_FRET = 12
-const STRING_LABELS = ['⑥', '⑤', '④', '③', '②', '①']   // index 0=低音E … 5=高音e
-const STRING_NAMES  = ['E', 'A', 'D', 'G', 'B', 'e']
-const DISPLAY_ORDER = [5, 4, 3, 2, 1, 0]                // 高音e在上 → 低音E在下（贴近六线谱）
-const SINGLE_DOTS = new Set([3, 5, 7, 9])
-const DOUBLE_DOTS = new Set([12])
+// 竖向和弦指法图输入：从左到右 = ⑥低音E … ①高音e（与常见和弦图一致）
+const STRING_NAMES = ['E', 'A', 'D', 'G', 'B', 'e']   // index 0=低音E … 5=高音e
+const WIN = 5           // 一次显示 5 品
+const CELL = 46         // 每格边长(px)
+const MAX_BASE = 8      // 把位最高从第 8 品起（可见到 12 品）
+const INLAY = new Set([3, 5, 7, 9, 12])   // 品位记号
 
 export default function ChordIdentifier() {
+  // frets[i]：该弦所按品位（0=空弦），null=闷弦
   const [frets, setFrets] = useState<(number | null)[]>([null, null, null, null, null, null])
+  const [baseFret, setBaseFret] = useState(1)
 
   function playString(i: number, f: number) {
     audioEngine.resume()
@@ -22,95 +24,131 @@ export default function ChordIdentifier() {
     pluckStringAt(OPEN_STRING_FREQS[i] * Math.pow(2, f / 12), ctx.currentTime + 0.01, 0.6)
   }
 
+  // 点击品格：设/取消该弦的品位
   function pickFret(i: number, f: number) {
     setFrets(prev => {
       const next = [...prev]
-      next[i] = prev[i] === f ? null : f   // 再点一次同品 → 闷弦
+      next[i] = prev[i] === f ? null : f
       return next
     })
     if (frets[i] !== f) playString(i, f)
   }
 
-  function toggleMute(i: number) {
+  // 点击顶部标记：闷弦 ↔ 空弦
+  function toggleTop(i: number) {
     setFrets(prev => {
       const next = [...prev]
-      next[i] = prev[i] === null ? 0 : null   // 闷 ↔ 空弦
+      next[i] = prev[i] === null ? 0 : null
       return next
     })
     if (frets[i] === null) playString(i, 0)
   }
 
   const result = identifyChord(frets)
-  const shape = frets.map(f => (f === null ? 'x' : String(f))).join(' ')   // 低→高
+  const shape = frets.map(f => (f === null ? 'x' : String(f))).join(' ')
   const anySelected = frets.some(f => f !== null)
 
+  const boardW = CELL * 6
+  const rows = Array.from({ length: WIN }, (_, r) => baseFret + r)   // 每行对应的绝对品位
+
   return (
-    <div className="w-full max-w-2xl flex flex-col gap-4">
-      {/* 指板输入 */}
-      <div className="rounded-xl overflow-hidden border border-zinc-700">
-        <div className="overflow-x-auto">
-          <div className="flex flex-col w-full" style={{ minWidth: 'max-content' }}>
+    <div className="w-full flex flex-col items-center gap-4">
+      {/* 把位控制 */}
+      <div className="flex items-center gap-3 text-xs text-zinc-400">
+        <span>把位</span>
+        <button
+          onClick={() => setBaseFret(b => Math.max(1, b - 1))}
+          disabled={baseFret <= 1}
+          className="w-7 h-7 rounded-md bg-zinc-800 text-zinc-300 disabled:opacity-30 hover:bg-zinc-700"
+        >−</button>
+        <span className="w-14 text-center text-zinc-200">第 {baseFret} 品起</span>
+        <button
+          onClick={() => setBaseFret(b => Math.min(MAX_BASE, b + 1))}
+          disabled={baseFret >= MAX_BASE}
+          className="w-7 h-7 rounded-md bg-zinc-800 text-zinc-300 disabled:opacity-30 hover:bg-zinc-700"
+        >+</button>
+      </div>
 
-            {/* 品位编号行 */}
-            <div className="flex border-b-[3px] border-zinc-400 bg-zinc-900">
-              <div className="sticky left-0 z-10 w-10 flex-shrink-0 bg-zinc-900 border-r border-zinc-700" />
-              {Array.from({ length: MAX_FRET + 1 }, (_, f) => (
-                <div key={f} className="flex-1 min-w-[2.2rem] h-7 flex flex-col items-center justify-center gap-[1px]">
-                  <span className="text-[9px] text-zinc-500 leading-none">{f === 0 ? '空' : f}</span>
-                  {DOUBLE_DOTS.has(f) && <span className="text-[5px] text-amber-400/70 leading-none">●●</span>}
-                  {SINGLE_DOTS.has(f) && <span className="text-[5px] text-zinc-600 leading-none">●</span>}
-                </div>
-              ))}
+      {/* 指法图 */}
+      <div className="flex">
+        {/* 左侧品位编号 */}
+        <div className="flex flex-col">
+          <div style={{ height: CELL * 0.6 }} />
+          {rows.map(fr => (
+            <div key={fr} style={{ height: CELL }} className="w-6 flex items-center justify-end pr-1 text-[11px] text-zinc-500 font-mono">
+              {fr}
             </div>
+          ))}
+        </div>
 
-            {/* 弦行：高音e在上 → 低音E在下 */}
-            {DISPLAY_ORDER.map((si, rowIdx) => {
-              const cur = frets[si]
-              const muted = cur === null
+        <div>
+          {/* 顶部 开放/闷弦 标记 */}
+          <div className="grid grid-cols-6" style={{ width: boardW, height: CELL * 0.6 }}>
+            {STRING_NAMES.map((_, s) => {
+              const f = frets[s]
+              const outOfWindow = f !== null && f > 0 && (f < baseFret || f >= baseFret + WIN)
+              const label = f === null ? '✕' : f === 0 ? '○' : outOfWindow ? String(f) : ''
+              const cls = f === null ? 'text-zinc-600' : f === 0 ? 'text-amber-400' : 'text-amber-400'
               return (
-                <div key={si} className={`flex ${rowIdx < DISPLAY_ORDER.length - 1 ? 'border-b border-zinc-800' : ''}`}>
-                  {/* 弦标签 / 闷弦按钮 */}
-                  <button
-                    onClick={() => toggleMute(si)}
-                    title={muted ? '闷弦（点按改为空弦）' : '点按闷弦'}
-                    className={`sticky left-0 z-10 w-10 flex-shrink-0 flex flex-col items-center justify-center border-r border-zinc-700 transition-colors ${
-                      muted ? 'bg-zinc-900 text-zinc-600' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                    }`}
-                  >
-                    <span className="text-[11px] font-mono leading-none">{muted ? '✕' : STRING_LABELS[si]}</span>
-                    <span className="text-[8px] text-zinc-500 font-mono leading-none mt-0.5">{STRING_NAMES[si]}</span>
-                  </button>
-
-                  {Array.from({ length: MAX_FRET + 1 }, (_, f) => {
-                    const active = cur === f
-                    return (
-                      <button
-                        key={f}
-                        onClick={() => pickFret(si, f)}
-                        className={`flex-1 min-w-[2.2rem] h-11 flex items-center justify-center border-l border-zinc-800 select-none transition-colors ${
-                          active ? 'bg-amber-500/15' : 'hover:bg-zinc-800'
-                        }`}
-                      >
-                        {active
-                          ? <span className="w-5 h-5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-bold flex items-center justify-center">{f === 0 ? '○' : f}</span>
-                          : <span className="w-1.5 h-1.5 rounded-full bg-zinc-800" />}
-                      </button>
-                    )
-                  })}
-                </div>
+                <button
+                  key={s}
+                  onClick={() => toggleTop(s)}
+                  title={f === null ? '闷弦（点击改为空弦）' : '点击闷弦'}
+                  className={`flex items-center justify-center text-sm font-bold hover:text-zinc-200 ${cls}`}
+                >
+                  {label}
+                </button>
               )
             })}
           </div>
-        </div>
-        <div className="text-[10px] text-zinc-600 text-center py-1.5 border-t border-zinc-800">
-          点击品格选择按法 · 点左侧弦名闷弦/空弦 · 左右滑动查看更多品格
+
+          {/* 品格区 */}
+          <div
+            className={`relative ${baseFret === 1 ? 'border-t-[3px] border-zinc-300' : 'border-t border-zinc-600'}`}
+            style={{ width: boardW }}
+          >
+            {rows.map((fr, r) => (
+              <div key={fr} className="grid grid-cols-6 border-b border-zinc-700" style={{ height: CELL }}>
+                {STRING_NAMES.map((_, s) => {
+                  const active = frets[s] === fr
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => pickFret(s, fr)}
+                      className="relative flex items-center justify-center hover:bg-zinc-800/40 transition-colors"
+                    >
+                      {/* 弦（竖线） */}
+                      <span className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-zinc-600" />
+                      {/* 品位记号（中间弦位置淡显） */}
+                      {!active && INLAY.has(fr) && s === 2 && (
+                        <span className="absolute right-0 translate-x-1/2 w-1.5 h-1.5 rounded-full bg-zinc-700" />
+                      )}
+                      {/* 按弦点 */}
+                      {active && (
+                        <span className="relative z-10 w-7 h-7 rounded-full bg-amber-500 shadow" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* 弦名 */}
+          <div className="grid grid-cols-6" style={{ width: boardW }}>
+            {STRING_NAMES.map((n, s) => (
+              <div key={s} className="text-center text-[11px] text-zinc-500 font-mono pt-1">{n}</div>
+            ))}
+          </div>
         </div>
       </div>
 
+      <div className="text-[10px] text-zinc-600 text-center">点击品格按弦 · 点顶部 ○/✕ 切换空弦/闷弦 · 用把位按钮上下移动</div>
+
       {/* 结果 */}
-      <div className="flex flex-col items-center gap-2 min-h-[7rem] justify-center rounded-xl bg-zinc-800/40 border border-zinc-700 py-5 px-4">
+      <div className="w-full max-w-md flex flex-col items-center gap-2 min-h-[7rem] justify-center rounded-xl bg-zinc-800/40 border border-zinc-700 py-5 px-4">
         {!anySelected ? (
-          <div className="text-zinc-600 text-sm text-center">在上方指板上选择你按住的位置<br />下方会显示这是什么和弦</div>
+          <div className="text-zinc-600 text-sm text-center">在上方指法图上选择你按住的位置<br />下方会显示这是什么和弦</div>
         ) : result.name ? (
           <>
             <div className="text-3xl font-bold text-amber-400 leading-none">{result.name}</div>
@@ -137,7 +175,7 @@ export default function ChordIdentifier() {
 
       {anySelected && (
         <button
-          onClick={() => setFrets([null, null, null, null, null, null])}
+          onClick={() => { setFrets([null, null, null, null, null, null]); setBaseFret(1) }}
           className="self-center px-4 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 text-xs hover:bg-zinc-700 hover:text-zinc-200"
         >
           清空
