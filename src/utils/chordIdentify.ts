@@ -75,13 +75,27 @@ export function identifyChord(frets: (number | null)[]): IdentifyResult {
   }
 
   const pcSet = new Set(pcs)
-  const matches: { root: number; suffix: string }[] = []
+  const matches: { root: number; suffix: string; omission: number }[] = []
   for (let root = 0; root < 12; root++) {
     if (!pcSet.has(root)) continue
-    const intervals = new Set(pcs.map(pc => ((pc - root) % 12 + 12) % 12))
+    const played = new Set(pcs.map(pc => ((pc - root) % 12 + 12) % 12))
     for (const [suffix, ivs] of Object.entries(SUFFIX_INTERVALS)) {
-      if (ivs.length !== intervals.size) continue
-      if (ivs.every(iv => intervals.has(iv))) matches.push({ root, suffix })
+      const chordSet = new Set(ivs)
+      // 弹到的每个音都必须属于该和弦（不能有和弦外音）
+      let subset = true
+      for (const iv of played) { if (!chordSet.has(iv)) { subset = false; break } }
+      if (!subset) continue
+      // 和弦里没弹到的音（省略音）：只允许省略纯五度(7)——吉他常见省略五度
+      let omission = 0
+      let ok = true
+      for (const iv of chordSet) {
+        if (!played.has(iv)) {
+          if (iv === 7) omission++
+          else { ok = false; break }
+        }
+      }
+      if (!ok) continue
+      matches.push({ root, suffix, omission })
     }
   }
 
@@ -90,15 +104,23 @@ export function identifyChord(frets: (number | null)[]): IdentifyResult {
   }
 
   matches.sort((a, b) => {
+    if (a.omission !== b.omission) return a.omission - b.omission   // 精确匹配优先于省略五度
     const bassRank = (a.root === bass ? 0 : 1) - (b.root === bass ? 0 : 1)
     if (bassRank !== 0) return bassRank
     return prio(a.suffix) - prio(b.suffix)
   })
 
   const best = matches[0]
-  const candidates: ChordCandidate[] = matches.slice(1).map(m => ({
-    root: m.root, suffix: m.suffix, isSlash: m.root !== bass, name: nameOf(m.root, m.suffix, bass),
-  }))
+  // 只展示"同样好"的其他解读（省略音数量相同），避免"脑补省略五度"的牵强别名
+  const seen = new Set<string>([nameOf(best.root, best.suffix, bass)])
+  const candidates: ChordCandidate[] = []
+  for (const m of matches.slice(1)) {
+    if (m.omission !== best.omission) continue
+    const name = nameOf(m.root, m.suffix, bass)
+    if (seen.has(name)) continue
+    seen.add(name)
+    candidates.push({ root: m.root, suffix: m.suffix, isSlash: m.root !== bass, name })
+  }
 
   return {
     name: nameOf(best.root, best.suffix, bass),
