@@ -8,7 +8,7 @@ export interface ChordTemplate {
   template: Float32Array
 }
 
-const SUFFIX_INTERVALS: Record<string, number[]> = {
+export const SUFFIX_INTERVALS: Record<string, number[]> = {
   major:   [0, 4, 7],
   minor:   [0, 3, 7],
   '7':     [0, 4, 7, 10],

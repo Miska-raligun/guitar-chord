@@ -3,19 +3,52 @@ import { useRecognizer } from '../../hooks/useRecognizer'
 import MicButton from './MicButton'
 import LiveChordDisplay from './LiveChordDisplay'
 import MatchList from './MatchList'
+import ChordIdentifier from './ChordIdentifier'
+
+type Mode = 'mic' | 'fretboard'
 
 export default function RecognizeTab() {
   const { isListening, matches, error, start, stop } = useRecognizer()
   // Only display results with meaningful confidence — below 0.3 is likely noise
   const topMatch = matches.length > 0 && matches[0].confidence > 0.3 ? matches[0] : null
 
+  const [mode, setMode] = useState<Mode>('mic')
   const [positionIndex, setPositionIndex] = useState(0)
   useEffect(() => {
     setPositionIndex(0)
   }, [topMatch?.root, topMatch?.suffix])
 
+  // Stop the mic when leaving mic mode
+  useEffect(() => {
+    if (mode !== 'mic') stop()
+  }, [mode, stop])
+
   return (
     <div className="flex flex-col items-center gap-6 px-4 py-6">
+      {/* 模式切换 */}
+      <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-xs">
+        <button
+          onClick={() => setMode('mic')}
+          className={`px-4 py-1.5 transition-colors ${
+            mode === 'mic' ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+          }`}
+        >
+          🎤 听音识别
+        </button>
+        <button
+          onClick={() => setMode('fretboard')}
+          className={`px-4 py-1.5 border-l border-zinc-700 transition-colors ${
+            mode === 'fretboard' ? 'bg-amber-500 text-zinc-950 font-semibold' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+          }`}
+        >
+          🎸 指板识别
+        </button>
+      </div>
+
+      {mode === 'fretboard' && <ChordIdentifier />}
+
+      {mode === 'mic' && (
+      <>
       <div className="flex flex-col items-center gap-2">
         <MicButton isListening={isListening} onStart={start} onStop={stop} />
         {isListening && (
@@ -53,6 +86,8 @@ export default function RecognizeTab() {
         <div className="text-center text-zinc-600 text-sm max-w-xs">
           点击麦克风按钮开始识别，然后在吉他上弹奏任意和弦
         </div>
+      )}
+      </>
       )}
     </div>
   )
