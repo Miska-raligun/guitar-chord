@@ -45,10 +45,10 @@ export default function ChordIdentifier() {
   const anySelected = frets.some(f => f !== null)
 
   return (
-    <div className="w-full max-w-md flex flex-col gap-4">
+    <div className="w-full max-w-2xl flex flex-col gap-4">
       {/* 指板输入 */}
       <div className="rounded-xl overflow-hidden border border-zinc-700">
-        <div className="overflow-x-auto scrollbar-none">
+        <div className="overflow-x-auto">
           <div className="flex flex-col w-full" style={{ minWidth: 'max-content' }}>
 
             {/* 品位编号行 */}
