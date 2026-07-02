@@ -7,7 +7,8 @@ import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/au
 import { useChordDb } from './useChordDb'
 
 const INITIAL_BARS  = 8
-const MAX_BARS      = 32
+const MAX_BARS      = 64
+const MAX_STRUM_SLOTS = 512  // strum 模式按"和弦事件"计数（一小节可细分为多个事件），给足 64+ 小节的余量
 const MASTER_SLOTS  = 16  // 十六分音符主网格，每小节始终存 16 个槽位
 
 type PatternStep = number | number[]
@@ -334,7 +335,7 @@ export function useSequencer() {
 
   const addBar = useCallback((noteValue?: 1|2|4|8|16) => {
     setState(s => {
-      const limit = s.pattern === 'strum' ? 128 : MAX_BARS
+      const limit = s.pattern === 'strum' ? MAX_STRUM_SLOTS : MAX_BARS
       if (s.chords.length >= limit) return s
       const slot: ChordSlot = { root: null, suffix: null, positionIndex: 0 }
       if (noteValue && noteValue > 1) slot.noteValue = noteValue
@@ -350,7 +351,7 @@ export function useSequencer() {
   const addStrumPattern = useCallback((slots: ChordSlot[]) => {
     setState(s => {
       if (s.pattern !== 'strum') return s
-      const room = 128 - s.chords.length
+      const room = MAX_STRUM_SLOTS - s.chords.length
       const toAdd = slots.slice(0, Math.max(0, room))
       if (toAdd.length === 0) return s
       const chords = [...s.chords, ...toAdd]
@@ -366,7 +367,7 @@ export function useSequencer() {
     setState(s => {
       if (chordIdx < 0 || chordIdx >= s.chords.length || slots.length === 0) return s
       // Respect the strum-mode slot cap (net change = slots.length - 1)
-      if (s.chords.length - 1 + slots.length > 128) return s
+      if (s.chords.length - 1 + slots.length > MAX_STRUM_SLOTS) return s
       const chords = [...s.chords.slice(0, chordIdx), ...slots, ...s.chords.slice(chordIdx + 1)]
       const rows = slots.map(() => Array(MASTER_SLOTS).fill(null))
       const melody = [...s.melody.slice(0, chordIdx), ...rows, ...s.melody.slice(chordIdx + 1)]
@@ -404,7 +405,7 @@ export function useSequencer() {
         ...(dir && dir !== 'D' ? { strumDir: dir } : {}),
       }))
       const chords = [...s.chords.slice(0, firstChordIdx), ...newSlots, ...s.chords.slice(end)]
-      if (chords.length > 128) return s
+      if (chords.length > MAX_STRUM_SLOTS) return s
       const rows = newSlots.map(() => Array(MASTER_SLOTS).fill(null))
       const melody = [...s.melody.slice(0, firstChordIdx), ...rows, ...s.melody.slice(end)]
       chordsRef.current = chords

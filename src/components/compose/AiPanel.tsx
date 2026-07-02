@@ -14,6 +14,7 @@ const BAR_OPTIONS = [
   { val: 12, label: '12' },
   { val: 16, label: '16' },
   { val: 32, label: '32' },
+  { val: 64, label: '64' },
 ]
 
 type AiMode = 'new' | 'append' | 'fill'

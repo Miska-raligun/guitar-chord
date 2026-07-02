@@ -264,10 +264,10 @@ function parseComposition(raw: string, targetBars?: number): AiComposition {
   // Chord count: in strum mode trust AI's event count; in fingerpicking enforce targetBars
   let numChords: number
   if (isStrum) {
-    numChords = Math.max(1, Math.min(128, rawChords.length || targetBars || 8))
+    numChords = Math.max(1, Math.min(512, rawChords.length || targetBars || 8))
   } else {
     const fallback = rawChords.length || 8
-    numChords = Math.max(1, Math.min(32, targetBars ?? Number(obj.bars) ?? fallback))
+    numChords = Math.max(1, Math.min(64, targetBars ?? Number(obj.bars) ?? fallback))
   }
 
   const chords = rawChords.slice(0, numChords)
