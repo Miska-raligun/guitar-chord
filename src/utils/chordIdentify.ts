@@ -14,7 +14,7 @@ function suffixLabel(suffix: string): string {
 // 优先级：越靠前越"常见/简单"，用于同一低音下的多解排序
 const SUFFIX_PRIORITY = [
   '5', 'major', 'minor', '7', 'm7', 'maj7', 'sus4', 'sus2', '6', 'm6',
-  'dim', 'aug', 'm7b5', 'dim7', 'add9', '9', 'maj9', 'm9',
+  'dim', 'aug', 'm7b5', 'dim7', 'add9', 'add11', '9', 'maj9', 'm9',
   '7sus4', '7sus2', '11', 'm11', 'maj11', '13', 'm13', 'maj13',
 ]
 function prio(suffix: string): number {

@@ -50,6 +50,13 @@ function getBassString(pos: ChordPosition): number {
 }
 
 function getFreq(pos: ChordPosition, strIdx: number): number | null {
+  // 生成型和弦(add4/add11 等)提供 6 位对齐的绝对 midi，优先据此发声，
+  // 避免与 react-chords 所需的"相对 baseFret 品位"冲突。
+  const m = pos.midi
+  if (m && m.length === 6) {
+    const note = m[strIdx]
+    return note < 0 ? null : 440 * Math.pow(2, (note - 69) / 12)
+  }
   const fret = pos.frets[strIdx]
   if (fret === -1) return null
   return OPEN_STRING_FREQS[strIdx] * Math.pow(2, fret / 12)

@@ -40,6 +40,8 @@ export function prettifySuffix(suffix: string): string {
     'm7b5': '半减七',
     dim7: '减七',
     add9: 'add9',
+    add4: '加四度',
+    add11: '加十一度',
     '6': '六和弦',
     m6: '小六',
     '9': '九和弦',

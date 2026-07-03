@@ -21,6 +21,7 @@ export const SUFFIX_INTERVALS: Record<string, number[]> = {
   'm7b5':  [0, 3, 6, 10],
   dim7:    [0, 3, 6, 9],
   add9:    [0, 2, 4, 7],
+  add11:   [0, 4, 5, 7],
   '6':     [0, 4, 7, 9],
   m6:      [0, 3, 7, 9],
   '9':     [0, 2, 4, 7, 10],
