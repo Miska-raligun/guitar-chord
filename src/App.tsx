@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Header from './components/layout/Header'
 import TabBar, { type Tab } from './components/layout/TabBar'
+import { onAppEvent, EV_SWITCH_TAB } from './utils/appBus'
 import RecognizeTab from './components/recognize/RecognizeTab'
 import BrowseTab from './components/browse/BrowseTab'
 import FretboardTab from './components/fretboard/FretboardTab'
@@ -32,6 +33,11 @@ export default function App() {
     // Remove animation class after it finishes so it can replay on re-visit
     timerRef.current = setTimeout(() => setEnterTab(null), 300)
   }
+
+  // 跨 Tab 联动：其他页面（如识别页"查看指法"）请求切换 Tab
+  const changeTabRef = useRef(changeTab)
+  changeTabRef.current = changeTab
+  useEffect(() => onAppEvent<Tab>(EV_SWITCH_TAB, t => changeTabRef.current(t)), [])
 
   function cls(t: Tab, extra = '') {
     const visible = tab === t

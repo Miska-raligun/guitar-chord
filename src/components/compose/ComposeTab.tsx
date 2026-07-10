@@ -1,50 +1,41 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSequencer } from '../../hooks/useSequencer'
 import { useSavedCompositions } from '../../hooks/useSavedCompositions'
 import { useAiCompose } from '../../hooks/useAiCompose'
 import { useMetronome } from '../../hooks/useMetronome'
+import { useDraftAutosave, loadDraft } from '../../hooks/useDraft'
 import { loadApiConfig } from './ApiConfigModal'
-import { encodeShareUrl, decodeShareUrl } from '../../utils/shareUrl'
-import { exportMidi } from '../../utils/midiExport'
+import { decodeShareUrl } from '../../utils/shareUrl'
+import { onAppEvent, EV_ADD_TO_COMPOSE } from '../../utils/appBus'
+import type { ChordRef } from '../../utils/appBus'
 import SequencerGrid from './SequencerGrid'
 import AiPanel from './AiPanel'
 import SaveNameModal from './SaveNameModal'
 import SavedList from './SavedList'
-import {
-  IconPlay, IconStop, IconWand, IconSave, IconLibrary,
-  IconShare, IconMetronome, IconMidi,
-} from '../ui/icons'
+import ControlBar, { TS_BEATS } from './ControlBar'
+import { IconPlay, IconStop, IconWand, IconSave, IconLibrary } from '../ui/icons'
 import type { AiComposition, ContinueFromState } from '../../hooks/useAiCompose'
 import type { SavedComposition } from '../../types/compose'
-import type { SequencerState } from '../../types/audio'
-import { ROOTS } from '../../utils/dbUtils'
 import { setToneConfig, getToneConfig } from '../../audio/toneConfig'
-
-const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
-  { id: '53231323', label: '民谣' },
-  { id: 'x3231323', label: '切音' },
-  { id: '3_12_3',   label: '古典' },
-  { id: 'strum',    label: '扫弦' },
-]
-
-const TS_BEATS: Record<string, number> = { '4/4': 4, '3/4': 3, '6/8': 6, '2/4': 2 }
 
 type Panel = 'ai' | 'save' | 'library' | null
 
 export default function ComposeTab() {
   const {
-    state, setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, addStrumPattern, fillBarAt, setBarSubdivision, removeLastBar, clearAll, loadComposition, transpose, play, stop,
+    state, canUndo, canRedo, undo, redo,
+    setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
+    setTimeSig, setNoteDuration, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
+    removeLastBar, clearAll, loadComposition, transpose, play, stop,
   } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition, exportAll, importFrom } = useSavedCompositions()
-  const { generate, isLoading: aiLoading, error: aiError, clearError: clearAiError } = useAiCompose()
+  const { generate, isLoading: aiLoading, progress: aiProgress, error: aiError, clearError: clearAiError } = useAiCompose()
   const metronome = useMetronome()
 
   const [panel,     setPanel]     = useState<Panel>(null)
   const [aiPrompt,  setAiPrompt]  = useState('')
   const [aiResult,  setAiResult]  = useState<AiComposition | null>(null)
   const [aiMode,    setAiMode]    = useState<'new' | 'append' | 'fill'>('new')
-  const [shareCopied, setShareCopied] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
 
   const hasChords = state.chords.some(c => c.root !== null)
   const hasExistingContent = hasChords
@@ -57,32 +48,57 @@ export default function ComposeTab() {
     setPanel('ai')
   }
 
-  const { isPlaying, bpm, pattern, keyRoot, timeSig, noteDuration } = state
-
-  // Local text buffer for the BPM input — lets the user type freely (e.g. clear
-  // the field, type "80") without each keystroke being clamped back into state.
-  const [bpmInput, setBpmInput] = useState(String(bpm))
-  useEffect(() => { setBpmInput(String(bpm)) }, [bpm])
-
-  function commitBpm() {
-    const n = Math.max(40, Math.min(200, Math.round(Number(bpmInput)) || bpm))
-    setBpm(n)
-    setBpmInput(String(n))
-  }
+  const { isPlaying, bpm, timeSig } = state
 
   // Keep metronome BPM/time-sig in sync silently
   useEffect(() => { metronome.syncBpm(bpm) }, [bpm])
   useEffect(() => { metronome.syncBpb(TS_BEATS[timeSig] ?? 4) }, [timeSig])
 
-  // Load composition from share URL on first mount
+  // On first mount: a share URL wins; otherwise restore the autosaved draft.
+  // Only after that does autosaving start (so the initial empty state never
+  // overwrites an existing draft).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const s = params.get('s')
-    if (!s) return
-    const decoded = decodeShareUrl(s)
-    if (!decoded) return
-    applyComposition(decoded as AiComposition)
+    const decoded = s ? decodeShareUrl(s) : null
+    if (decoded) {
+      applyComposition(decoded as AiComposition)
+    } else {
+      const draft = loadDraft()
+      if (draft) {
+        loadComposition(draft.chords, draft.melody, {
+          bpm: draft.bpm, pattern: draft.pattern, keyRoot: draft.keyRoot,
+          timeSig: draft.timeSig, noteDuration: draft.noteDuration,
+        })
+      }
+    }
+    setDraftReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useDraftAutosave(state, draftReady)
+
+  // 识别页"加入编曲"入口
+  useEffect(() => onAppEvent<ChordRef>(EV_ADD_TO_COMPOSE, ({ root, suffix }) => {
+    appendChordSlot(root, suffix)
+  }), [appendChordSlot])
+
+  // Ctrl/Cmd+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做（输入框内不拦截）
+  const undoRef = useRef(undo)
+  const redoRef = useRef(redo)
+  undoRef.current = undo
+  redoRef.current = redo
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      const key = e.key.toLowerCase()
+      if (key === 'z' && !e.shiftKey) { e.preventDefault(); undoRef.current() }
+      else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redoRef.current() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   function applyComposition(src: AiComposition | SavedComposition, mode: 'new' | 'append' | 'fill' = 'new') {
@@ -133,160 +149,22 @@ export default function ComposeTab() {
     if (r) setAiResult(r)
   }
 
-  function handleShare() {
-    const url = encodeShareUrl(state)
-    navigator.clipboard.writeText(url).then(() => {
-      setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2000)
-    })
-  }
-
-  function handleMidi() {
-    exportMidi({ bpm: state.bpm, timeSig: state.timeSig, chords: state.chords, melody: state.melody })
-  }
-
   return (
     <div className="flex flex-col h-full">
-      {/* ── Control bar ── */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900 border-b border-zinc-800 flex-wrap">
-        {/* Key */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">调</span>
-          <select
-            value={keyRoot}
-            onChange={e => setKeyRoot(Number(e.target.value))}
-            className="bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none focus:border-amber-500"
-          >
-            {ROOTS.map((r, i) => <option key={r} value={i}>{r}</option>)}
-          </select>
-        </div>
-
-        {/* Pattern */}
-        <div className="flex items-center gap-1">
-          {PATTERNS.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setPattern(p.id)}
-              className={`px-2.5 py-2 rounded-md text-xs font-medium ${
-                pattern === p.id ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-              }`}
-            >{p.label}</button>
-          ))}
-        </div>
-
-        {/* Time signature */}
-        <div className="flex items-center gap-1">
-          {(['4/4', '3/4', '6/8', '2/4'] as const).map(ts => (
-            <button
-              key={ts}
-              onClick={() => setTimeSig(ts)}
-              className={`px-2 py-2 rounded-md text-xs font-mono font-medium ${
-                timeSig === ts ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-              }`}
-            >{ts}</button>
-          ))}
-        </div>
-
-        {/* Note duration */}
-        <div className="flex items-center gap-1">
-          {([
-            { d: 16 as const, label: '全', title: '全音符' },
-            { d: 8  as const, label: '半', title: '二分音符' },
-            { d: 4  as const, label: '♩', title: '四分音符' },
-            { d: 2  as const, label: '♪', title: '八分音符' },
-            { d: 1  as const, label: '♬', title: '十六分音符' },
-          ]).map(({ d, label, title }) => (
-            <button
-              key={d}
-              onClick={() => setNoteDuration(d)}
-              title={title}
-              className={`px-2 py-2 rounded-md text-xs font-medium ${
-                noteDuration === d ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-              }`}
-            >{label}</button>
-          ))}
-        </div>
-
-        {/* BPM */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">BPM</span>
-          <input
-            type="number" min={40} max={200} value={bpmInput}
-            onChange={e => setBpmInput(e.target.value)}
-            onBlur={commitBpm}
-            onKeyDown={e => { if (e.key === 'Enter') commitBpm() }}
-            className="w-14 bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none text-center focus:border-amber-500"
-          />
-        </div>
-      </div>
-
-      {/* ── Transpose + Tools ──
-           Mobile: two stacked rows
-           PC (md+): single row, tools pushed to the right            */}
-      <div className="flex flex-col md:flex-row md:items-center gap-1.5 md:gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
-        {/* Transpose */}
-        <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium mr-0.5">移调</span>
-          {[-5, -4, -3, -2, -1, +1, +2, +3, +4, +5].map(n => (
-            <button
-              key={n}
-              onClick={() => transpose(n)}
-              title={`移调 ${n > 0 ? '+' : ''}${n} 半音`}
-              className="w-6 h-6 flex items-center justify-center rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-            >{n > 0 ? `+${n}` : n}</button>
-          ))}
-        </div>
-
-        {/* Tools */}
-        <div className="flex items-center gap-1.5 md:ml-auto">
-          <button
-            onClick={() => metronome.toggle(bpm, TS_BEATS[timeSig] ?? 4)}
-            title="节拍器"
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
-              metronome.isRunning
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-            }`}
-          >
-            <IconMetronome className={`w-3.5 h-3.5 ${metronome.isRunning ? 'animate-pulse' : ''}`} />
-            <span>节拍器</span>
-            {metronome.isRunning && (
-              <span className="flex gap-[3px] ml-0.5">
-                {Array.from({ length: metronome.beatsPerBar }, (_, i) => (
-                  <span
-                    key={i}
-                    className={`inline-block w-1.5 h-1.5 rounded-full transition-colors ${
-                      i === metronome.currentBeat ? 'bg-amber-400' : 'bg-zinc-600'
-                    }`}
-                  />
-                ))}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={handleMidi}
-            title="导出 MIDI"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700"
-          >
-            <IconMidi className="w-3.5 h-3.5" />
-            MIDI
-          </button>
-
-          <button
-            onClick={handleShare}
-            title="复制分享链接"
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
-              shareCopied
-                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
-                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
-            }`}
-          >
-            <IconShare className="w-3.5 h-3.5" />
-            {shareCopied ? '已复制！' : '分享'}
-          </button>
-        </div>
-      </div>
+      <ControlBar
+        state={state}
+        setBpm={setBpm}
+        setPattern={setPattern}
+        setKeyRoot={setKeyRoot}
+        setTimeSig={setTimeSig}
+        setNoteDuration={setNoteDuration}
+        transpose={transpose}
+        metronome={metronome}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+      />
 
       {/* ── Action row (AI / Save / Library) ── */}
       <div className="flex gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800">
@@ -301,7 +179,7 @@ export default function ComposeTab() {
           }`}
         >
           <IconWand className={`w-3.5 h-3.5 ${aiLoading ? 'animate-spin' : ''}`} />
-          {aiLoading ? '生成中...' : aiResult ? 'AI 结果' : 'AI 创作'}
+          {aiLoading ? (aiProgress || '生成中...') : aiResult ? 'AI 结果' : 'AI 创作'}
         </button>
         <button
           onClick={() => setPanel('save')}
@@ -360,7 +238,7 @@ export default function ComposeTab() {
         <button
           onClick={clearAll}
           className="px-3 py-3 rounded-xl bg-zinc-800 text-zinc-500 text-xs hover:bg-red-500/20 hover:text-red-400 border border-zinc-700 transition-colors"
-          title="清空所有编曲"
+          title="清空所有编曲（可撤销）"
         >清空</button>
         {state.melody.length > 1 && (
           <button
@@ -381,6 +259,7 @@ export default function ComposeTab() {
           result={aiResult}
           onResultClear={() => setAiResult(null)}
           isLoading={aiLoading}
+          progress={aiProgress}
           error={aiError}
           onClearError={clearAiError}
           onTriggerGenerate={handleAiGenerate}

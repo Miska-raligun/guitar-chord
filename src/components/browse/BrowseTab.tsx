@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useChordDb } from '../../hooks/useChordDb'
 import { useArpeggio } from '../../hooks/useArpeggio'
+import { onAppEvent, EV_VIEW_CHORD } from '../../utils/appBus'
+import type { ChordRef } from '../../utils/appBus'
 import RootSelector from './RootSelector'
 import SuffixSelector from './SuffixSelector'
 import PositionSelector from './PositionSelector'
@@ -36,6 +38,12 @@ export default function BrowseTab() {
     setPositionIndex(0)
     stop()
   }, [selectedRoot, selectedSuffix, stop])
+
+  // 识别页"查看指法"联动：跳转到指定和弦
+  useEffect(() => onAppEvent<ChordRef>(EV_VIEW_CHORD, ({ root, suffix }) => {
+    setSelectedRoot(root)
+    setSelectedSuffix(suffix)
+  }), [])
 
   // 播放中实时更新自定义节奏型
   useEffect(() => {

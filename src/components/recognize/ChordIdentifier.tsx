@@ -5,6 +5,8 @@ import { identifyChord } from '../../utils/chordIdentify'
 import { prettifySuffix } from '../../utils/dbUtils'
 import { NOTE_NAMES } from '../../utils/noteUtils'
 import { OPEN_STRING_FREQS } from '../../types/chord'
+import { useChordDb } from '../../hooks/useChordDb'
+import { viewChordInBrowse, addChordToCompose } from '../../utils/appBus'
 
 // 竖向和弦指法图输入：从左到右 = ⑥低音E … ①高音e（与常见和弦图一致）
 const STRING_NAMES = ['E', 'A', 'D', 'G', 'B', 'e']   // index 0=低音E … 5=高音e
@@ -17,6 +19,8 @@ export default function ChordIdentifier() {
   // frets[i]：该弦所按品位（0=空弦），null=闷弦
   const [frets, setFrets] = useState<(number | null)[]>([null, null, null, null, null, null])
   const [baseFret, setBaseFret] = useState(1)
+  const [added, setAdded] = useState(false)
+  const { getChordEntry } = useChordDb()
 
   function playString(i: number, f: number) {
     audioEngine.resume()
@@ -47,6 +51,19 @@ export default function ChordIdentifier() {
   const result = identifyChord(frets)
   const shape = frets.map(f => (f === null ? 'x' : String(f))).join(' ')
   const anySelected = frets.some(f => f !== null)
+
+  // 识别成功且该和弦在指法库里有数据时，提供"查看指法 / 加入编曲"联动
+  const chordRef = (result.name && !result.isSingleNote && result.root !== null && result.suffix)
+    ? { root: NOTE_NAMES[result.root], suffix: result.suffix }
+    : null
+  const linkable = chordRef !== null && getChordEntry(chordRef.root, chordRef.suffix) !== null
+
+  function handleAddToCompose() {
+    if (!chordRef) return
+    addChordToCompose(chordRef)
+    setAdded(true)
+    setTimeout(() => setAdded(false), 1500)
+  }
 
   const boardW = CELL * 6
   const rows = Array.from({ length: WIN }, (_, r) => baseFret + r)   // 每行对应的绝对品位
@@ -161,6 +178,26 @@ export default function ChordIdentifier() {
             {result.candidates.length > 0 && (
               <div className="text-[11px] text-zinc-500 mt-1 text-center">
                 也可看作：{result.candidates.slice(0, 3).map(c => c.name).join('、')}
+              </div>
+            )}
+            {linkable && chordRef && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => viewChordInBrowse(chordRef)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-amber-400"
+                >
+                  查看指法
+                </button>
+                <button
+                  onClick={handleAddToCompose}
+                  className={`px-3 py-1.5 rounded-lg text-xs ${
+                    added
+                      ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-amber-400'
+                  }`}
+                >
+                  {added ? '✓ 已加入' : '加入编曲'}
+                </button>
               </div>
             )}
           </>

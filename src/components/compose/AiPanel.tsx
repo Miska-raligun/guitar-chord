@@ -27,6 +27,7 @@ interface Props {
   result: AiComposition | null
   onResultClear: () => void
   isLoading: boolean
+  progress: string | null
   error: string | null
   onClearError: () => void
   onTriggerGenerate: (targetBars?: number) => void
@@ -40,7 +41,7 @@ export default function AiPanel({
   onGenerate, onClose,
   prompt, onPromptChange,
   result, onResultClear,
-  isLoading, error, onClearError,
+  isLoading, progress, error, onClearError,
   onTriggerGenerate,
   hasExistingContent, hasChords,
   aiMode, onAiModeChange,
@@ -254,7 +255,7 @@ export default function AiPanel({
                 }`}
               >
                 <IconWand className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                {isLoading ? '生成中，请稍候...' : isAppend ? '续写编曲' : isFill ? '生成旋律' : '生成编曲'}
+                {isLoading ? (progress || '生成中，请稍候...') : isAppend ? '续写编曲' : isFill ? '生成旋律' : '生成编曲'}
               </button>
             </div>
           )}

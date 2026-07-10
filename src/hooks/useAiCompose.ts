@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { ApiConfig } from '../types/compose'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import type { GuitarMode, EffectType } from '../audio/toneConfig'
-import { getMasterSlotsPerBar } from './useSequencer'
+import { getMasterSlotsPerBar } from '../utils/sequencerUtils'
 
 const ROOT_NAMES_AI = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B']
 
@@ -164,13 +164,72 @@ export interface AiComposition {
   tone?: AiTone
 }
 
+// 无数据活动的最长等待：计时器在每个流数据块到达时重置，
+// 因此长生成只要一直有数据就不会被误杀。
 const REQUEST_TIMEOUT_MS = 50_000
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface SseSpec {
+  extractDelta: (json: any) => string | undefined   // 流式增量文本
+  extractFull:  (json: any) => string | undefined   // 非流式整包响应（provider 不支持 stream 时的兜底）
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+async function streamSSE(
+  url: string,
+  init: RequestInit,
+  spec: SseSpec,
+  onText?: (fullText: string) => void,
+): Promise<string> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const resetTimer = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  }
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    const res = await fetch(url, { ...init, signal: controller.signal })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`API 错误 ${res.status}: ${err.slice(0, 200)}`)
+    }
+    if (!res.body) throw new Error('响应无内容')
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let lineBuf = ''
+    let rawAll = ''
+    let full = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      resetTimer()
+      const chunk = decoder.decode(value, { stream: true })
+      rawAll += chunk
+      lineBuf += chunk
+      const lines = lineBuf.split('\n')
+      lineBuf = lines.pop() ?? ''
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t.startsWith('data:')) continue
+        const payload = t.slice(5).trim()
+        if (payload === '[DONE]') continue
+        try {
+          const delta = spec.extractDelta(JSON.parse(payload))
+          if (delta) {
+            full += delta
+            onText?.(full)
+          }
+        } catch { /* keepalive / partial json */ }
+      }
+    }
+    if (full) return full
+    // 兜底：provider 忽略 stream 参数、直接返回整包 JSON
+    try {
+      const whole = spec.extractFull(JSON.parse(rawAll))
+      if (whole) return whole
+    } catch { /* fallthrough */ }
+    throw new Error('API 返回了无法解析的响应')
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
       throw new Error('请求超时，请检查网络连接或稍后重试')
@@ -181,9 +240,9 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
   }
 }
 
-async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
+async function callOpenAi(prompt: string, config: ApiConfig, onText?: (t: string) => void): Promise<string> {
   const url = `${config.baseUrl.replace(/\/$/, '')}/v1/chat/completions`
-  const res = await fetchWithTimeout(url, {
+  return streamSSE(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -191,24 +250,22 @@ async function callOpenAi(prompt: string, config: ApiConfig): Promise<string> {
     },
     body: JSON.stringify({
       model: config.model,
+      stream: true,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user',   content: prompt },
       ],
     }),
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`OpenAI API 错误 ${res.status}: ${err.slice(0, 200)}`)
-  }
-  const data = await res.json()
-  return data.choices[0].message.content as string
+  }, {
+    extractDelta: j => j.choices?.[0]?.delta?.content ?? undefined,
+    extractFull:  j => j.choices?.[0]?.message?.content ?? undefined,
+  }, onText)
 }
 
-async function callAnthropic(prompt: string, config: ApiConfig): Promise<string> {
+async function callAnthropic(prompt: string, config: ApiConfig, onText?: (t: string) => void): Promise<string> {
   const url = `${config.baseUrl.replace(/\/$/, '')}/v1/messages`
-  const res = await fetchWithTimeout(url, {
+  return streamSSE(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -218,20 +275,18 @@ async function callAnthropic(prompt: string, config: ApiConfig): Promise<string>
     },
     body: JSON.stringify({
       model: config.model,
-      max_tokens: 2048,
+      max_tokens: 8192,
+      stream: true,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
     }),
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Anthropic API 错误 ${res.status}: ${err.slice(0, 200)}`)
-  }
-  const data = await res.json()
-  return data.content[0].text as string
+  }, {
+    extractDelta: j => j.type === 'content_block_delta' ? (j.delta?.text ?? undefined) : undefined,
+    extractFull:  j => j.content?.[0]?.text ?? undefined,
+  }, onText)
 }
 
-function parseComposition(raw: string, targetBars?: number): AiComposition {
+export function parseComposition(raw: string, targetBars?: number): AiComposition {
   const json = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim()
   const obj = JSON.parse(json)
 
@@ -323,6 +378,7 @@ function parseComposition(raw: string, targetBars?: number): AiComposition {
 
 export function useAiCompose() {
   const [isLoading, setIsLoading] = useState(false)
+  const [progress, setProgress]   = useState<string | null>(null)
   const [error, setError]         = useState<string | null>(null)
 
   async function generate(prompt: string, config: ApiConfig, targetBars?: number, continueFrom?: ContinueFromState): Promise<AiComposition | null> {
@@ -331,6 +387,7 @@ export function useAiCompose() {
       return null
     }
     setIsLoading(true)
+    setProgress(null)
     setError(null)
     const isFill = continueFrom?.fillMelody === true
     // Fill-melody mode keeps the existing chords, so no bar target applies.
@@ -338,18 +395,28 @@ export function useAiCompose() {
     const barPrefix = (!isFill && bars) ? `[目标：约 ${bars} 个物理小节。在 strum 模式下，若使用 noteValue=4，则 chords 约需 ${bars * 4} 项] ` : ''
     const contPrefix = continueFrom ? buildContinuationPrefix(continueFrom, bars) : ''
     const userMsg = contPrefix + barPrefix + prompt
+    // 流式进度：数生成文本里出现了几个 "root" ≈ 已生成的和弦事件数
+    let lastCount = -1
+    const onText = (full: string) => {
+      const count = (full.match(/"root"/g) ?? []).length
+      if (count !== lastCount) {
+        lastCount = count
+        setProgress(count > 0 ? `已生成 ${count} 个和弦事件…` : '正在思考…')
+      }
+    }
     try {
       const raw = config.provider === 'anthropic'
-        ? await callAnthropic(userMsg, config)
-        : await callOpenAi(userMsg, config)
+        ? await callAnthropic(userMsg, config, onText)
+        : await callOpenAi(userMsg, config, onText)
       return parseComposition(raw, bars)
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败，请检查网络和配置')
       return null
     } finally {
       setIsLoading(false)
+      setProgress(null)
     }
   }
 
-  return { generate, isLoading, error, clearError: () => setError(null) }
+  return { generate, isLoading, progress, error, clearError: () => setError(null) }
 }

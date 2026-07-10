@@ -1,112 +1,33 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { pluckStringAt, strumMutedAt, stopAllNodes } from '../audio/karplusStrong'
 import audioEngine from '../audio/AudioEngine'
-import { OPEN_STRING_FREQS } from '../types/chord'
 import type { ChordPosition } from '../types/chord'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import { useChordDb } from './useChordDb'
+import {
+  INITIAL_BARS, MAX_BARS, MAX_STRUM_SLOTS, MASTER_SLOTS,
+  BASS, MUTE_BASS, REST, STRUM_DOWN, STRUM_UP, STRUM_MUTE,
+  getPatternSteps, getStepsPerBar, getMasterSlotsPerBar, getChordMasterDuration,
+  getMasterSPerStep, getFreq, getBassString, semitoneToFreq,
+  makeEmptyChords, makeEmptyMelody, resplitBarMelody,
+} from '../utils/sequencerUtils'
+import type { PatternStep } from '../utils/sequencerUtils'
 
-const INITIAL_BARS  = 8
-const MAX_BARS      = 64
-const MAX_STRUM_SLOTS = 512  // strum 模式按"和弦事件"计数（一小节可细分为多个事件），给足 64+ 小节的余量
-const MASTER_SLOTS  = 16  // 十六分音符主网格，每小节始终存 16 个槽位
-
-type PatternStep = number | number[]
-const BASS       = -10
-const MUTE_BASS  = -11
-const REST       = -20
-const STRUM_DOWN = -30
-const STRUM_UP   = -31
-const STRUM_MUTE = -32
-
-const PATTERN_53231323: PatternStep[] = [BASS,      3, 4, 3, 5, 3, 4, 3]
-const PATTERN_X3231323: PatternStep[] = [MUTE_BASS, 3, 4, 3, 5, 3, 4, 3]
-const PATTERN_3_12_3:   PatternStep[] = [BASS, 3, [4, 5], 3]
+// 兼容旧导入路径：网格换算函数历史上从本文件导出
+export {
+  getStepsPerBar, getMasterSlotsPerBar, getChordMasterDuration,
+  getTotalPhysicalBars, getMelodyDisplaySlots, cellToMasterSlot,
+} from '../utils/sequencerUtils'
 
 const BASS_VOL   = 0.88
 const TREBLE_VOL = 0.55
 const SWEEP_DUR  = 0.055
 
-function getPatternSteps(pat: SequencerState['pattern']): PatternStep[] {
-  if (pat === '53231323') return PATTERN_53231323
-  if (pat === 'x3231323') return PATTERN_X3231323
-  if (pat === '3_12_3')   return PATTERN_3_12_3
-  return [STRUM_DOWN, STRUM_DOWN, STRUM_DOWN, STRUM_DOWN]
-}
+const MAX_HISTORY = 50
 
-// 节拍器步数（决定拨弦频率）
-export function getStepsPerBar(pat: SequencerState['pattern'], timeSig: TimeSig): number {
-  const is8step = pat === '53231323' || pat === 'x3231323'
-  if (timeSig === '4/4') return is8step ? 8 : 4
-  if (timeSig === '3/4' || timeSig === '6/8') return is8step ? 6 : 3
-  return is8step ? 4 : 2  // 2/4
-}
-
-// 主网格槽数（十六分音符数）
-export function getMasterSlotsPerBar(timeSig: TimeSig): number {
-  if (timeSig === '4/4') return 16
-  if (timeSig === '3/4' || timeSig === '6/8') return 12
-  return 8  // 2/4
-}
-
-// 当前和弦槽占用的主网格槽数（strum 模式下按 noteValue 计算，其他模式固定为一小节）
-export function getChordMasterDuration(chord: ChordSlot, timeSig: TimeSig): number {
-  return Math.round(getMasterSlotsPerBar(timeSig) / (chord.noteValue ?? 1))
-}
-
-// 总和弦槽数（等于 melody 数组长度）
-export function getTotalPhysicalBars(chords: ChordSlot[]): number {
-  return chords.length
-}
-
-// 主步长始终是十六分音符时长
-function getMasterSPerStep(bpm: number): number {
-  return 60 / bpm / 4
-}
-
-// 当前时值下显示的格子数
-export function getMelodyDisplaySlots(noteDuration: SequencerState['noteDuration'], timeSig: TimeSig): number {
-  return Math.max(1, Math.floor(getMasterSlotsPerBar(timeSig) / noteDuration))
-}
-
-// 显示格子 c → 主网格起始槽位
-export function cellToMasterSlot(cell: number, noteDuration: SequencerState['noteDuration']): number {
-  return cell * noteDuration
-}
-
-function getBassString(pos: ChordPosition): number {
-  for (let i = 0; i < pos.frets.length; i++) {
-    if (pos.frets[i] !== -1) return i
-  }
-  return 1
-}
-
-function getFreq(pos: ChordPosition, strIdx: number): number | null {
-  // 生成型和弦提供 6 位对齐的绝对 midi 时优先使用（见 data/addChords.ts）
-  const m = pos.midi
-  if (m && m.length === 6) {
-    const note = m[strIdx]
-    return note < 0 ? null : 440 * Math.pow(2, (note - 69) / 12)
-  }
-  const fret = pos.frets[strIdx]
-  if (fret === -1) return null
-  return OPEN_STRING_FREQS[strIdx] * Math.pow(2, fret / 12)
-}
-
-function semitoneToFreq(semitone: number): number {
-  if (semitone >= 4) {
-    return OPEN_STRING_FREQS[5] * Math.pow(2, (semitone - 4) / 12)
-  } else {
-    return OPEN_STRING_FREQS[4] * Math.pow(2, (semitone + 1) / 12)
-  }
-}
-
-function makeEmptyChords(n = INITIAL_BARS): ChordSlot[] {
-  return Array.from({ length: n }, () => ({ root: null, suffix: null, positionIndex: 0 }))
-}
-
-function makeEmptyMelody(n = INITIAL_BARS): (MelodyNote | null)[][] {
-  return Array.from({ length: n }, () => Array(MASTER_SLOTS).fill(null))
+interface Snapshot {
+  chords: ChordSlot[]
+  melody: (MelodyNote | null)[][]
 }
 
 export function useSequencer() {
@@ -139,6 +60,39 @@ export function useSequencer() {
   useEffect(() => { chordsRef.current = state.chords }, [state.chords])
   useEffect(() => { melodyRef.current = state.melody }, [state.melody])
 
+  // ── 撤销/重做 ──────────────────────────────────────────────
+  // 每次内容变更前把 {chords, melody} 快照压入 past 栈（引用相等去重，
+  // 因此 StrictMode 下 updater 双调用也不会重复入栈）。
+  const pastRef   = useRef<Snapshot[]>([])
+  const futureRef = useRef<Snapshot[]>([])
+
+  function pushHistory(s: Pick<SequencerState, 'chords' | 'melody'>) {
+    const top = pastRef.current[pastRef.current.length - 1]
+    if (top && top.chords === s.chords && top.melody === s.melody) return
+    pastRef.current.push({ chords: s.chords, melody: s.melody })
+    if (pastRef.current.length > MAX_HISTORY) pastRef.current.shift()
+    futureRef.current = []
+  }
+
+  const undo = useCallback(() => {
+    const prev = pastRef.current.pop()
+    if (!prev) return
+    futureRef.current.push({ chords: chordsRef.current, melody: melodyRef.current })
+    chordsRef.current = prev.chords
+    melodyRef.current = prev.melody
+    setState(s => ({ ...s, chords: prev.chords, melody: prev.melody }))
+  }, [])
+
+  const redo = useCallback(() => {
+    const next = futureRef.current.pop()
+    if (!next) return
+    pastRef.current.push({ chords: chordsRef.current, melody: melodyRef.current })
+    chordsRef.current = next.chords
+    melodyRef.current = next.melody
+    setState(s => ({ ...s, chords: next.chords, melody: next.melody }))
+  }, [])
+
+  // ── 播放调度 ───────────────────────────────────────────────
   const scheduleStep = useCallback((step: PatternStep, time: number, isBass: boolean, pos: ChordPosition) => {
     if (step === REST) return
 
@@ -193,12 +147,9 @@ export function useSequencer() {
     // Build chord event timeline (absolute master-slot positions)
     let cumSlots = 0
     const chordStarts: number[] = []
-    const chordDurs: number[] = []
     for (const c of chords) {
       chordStarts.push(cumSlots)
-      const dur = isStrum ? getChordMasterDuration(c, timeSig) : master
-      chordDurs.push(dur)
-      cumSlots += dur
+      cumSlots += isStrum ? getChordMasterDuration(c, timeSig) : master
     }
     const total = cumSlots || master
 
@@ -282,10 +233,12 @@ export function useSequencer() {
     intervalRef.current = setInterval(schedulerTick, 25)
   }, [schedulerTick])
 
+  // ── 内容编辑 ───────────────────────────────────────────────
   // Simple setter: no melody resize needed (melody.length === chords.length always)
   const setChordSlot = useCallback((chordIdx: number, slot: ChordSlot) => {
     setState(s => {
       if (s.chords[chordIdx] === undefined) return s
+      pushHistory(s)
       const chords = s.chords.map((c, i) => i === chordIdx ? slot : c)
       chordsRef.current = chords
       return { ...s, chords }
@@ -294,6 +247,7 @@ export function useSequencer() {
 
   const setMelodyNote = useCallback((bar: number, masterSlot: number, note: MelodyNote | null) => {
     setState(s => {
+      pushHistory(s)
       const melody = s.melody.map((row, i) => {
         if (i !== bar) return row
         const newRow = [...row]
@@ -343,9 +297,24 @@ export function useSequencer() {
     setState(s => {
       const limit = s.pattern === 'strum' ? MAX_STRUM_SLOTS : MAX_BARS
       if (s.chords.length >= limit) return s
+      pushHistory(s)
       const slot: ChordSlot = { root: null, suffix: null, positionIndex: 0 }
       if (noteValue && noteValue > 1) slot.noteValue = noteValue
       const chords = [...s.chords, slot]
+      const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
+      chordsRef.current = chords
+      melodyRef.current = melody
+      return { ...s, chords, melody }
+    })
+  }, [])
+
+  // 追加一个带和弦的整小节事件（供识别页"加入编曲"等外部入口使用）
+  const appendChordSlot = useCallback((root: string, suffix: string) => {
+    setState(s => {
+      const limit = s.pattern === 'strum' ? MAX_STRUM_SLOTS : MAX_BARS
+      if (s.chords.length >= limit) return s
+      pushHistory(s)
+      const chords = [...s.chords, { root, suffix, positionIndex: 0 }]
       const melody = [...s.melody, Array(MASTER_SLOTS).fill(null)]
       chordsRef.current = chords
       melodyRef.current = melody
@@ -360,6 +329,7 @@ export function useSequencer() {
       const room = MAX_STRUM_SLOTS - s.chords.length
       const toAdd = slots.slice(0, Math.max(0, room))
       if (toAdd.length === 0) return s
+      pushHistory(s)
       const chords = [...s.chords, ...toAdd]
       const melody = [...s.melody, ...toAdd.map(() => Array(MASTER_SLOTS).fill(null))]
       chordsRef.current = chords
@@ -374,6 +344,7 @@ export function useSequencer() {
       if (chordIdx < 0 || chordIdx >= s.chords.length || slots.length === 0) return s
       // Respect the strum-mode slot cap (net change = slots.length - 1)
       if (s.chords.length - 1 + slots.length > MAX_STRUM_SLOTS) return s
+      pushHistory(s)
       const chords = [...s.chords.slice(0, chordIdx), ...slots, ...s.chords.slice(chordIdx + 1)]
       const rows = slots.map(() => Array(MASTER_SLOTS).fill(null))
       const melody = [...s.melody.slice(0, chordIdx), ...rows, ...s.melody.slice(chordIdx + 1)]
@@ -385,8 +356,8 @@ export function useSequencer() {
 
   // Split (or merge) the bar starting at firstChordIdx into `noteValue` uniform
   // strum slots (each noteValue=N, N of them exactly fill one bar). The bar's
-  // primary chord + strum direction are carried into every new slot; that bar's
-  // melody rows are reset.
+  // primary chord + strum direction carry into every new slot; melody notes are
+  // preserved by their absolute position within the bar (see resplitBarMelody).
   const setBarSubdivision = useCallback((firstChordIdx: number, noteValue: 1|2|4|8|16) => {
     setState(s => {
       if (s.pattern !== 'strum') return s
@@ -412,7 +383,10 @@ export function useSequencer() {
       }))
       const chords = [...s.chords.slice(0, firstChordIdx), ...newSlots, ...s.chords.slice(end)]
       if (chords.length > MAX_STRUM_SLOTS) return s
-      const rows = newSlots.map(() => Array(MASTER_SLOTS).fill(null))
+      pushHistory(s)
+      const oldRows = s.melody.slice(firstChordIdx, end)
+      const oldDurs = barSlots.map(c => getChordMasterDuration(c, s.timeSig))
+      const rows = resplitBarMelody(oldRows, oldDurs, count, Math.round(masterPerBar / count))
       const melody = [...s.melody.slice(0, firstChordIdx), ...rows, ...s.melody.slice(end)]
       chordsRef.current = chords
       melodyRef.current = melody
@@ -423,6 +397,7 @@ export function useSequencer() {
   const removeLastBar = useCallback(() => {
     setState(s => {
       if (s.chords.length <= 1) return s
+      pushHistory(s)
       const chords = s.chords.slice(0, -1)
       const melody = s.melody.slice(0, -1)
       chordsRef.current = chords
@@ -434,6 +409,7 @@ export function useSequencer() {
   const ROOTS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'] as const
   const transpose = useCallback((semitones: number) => {
     setState(s => {
+      pushHistory(s)
       const shift = ((semitones % 12) + 12) % 12
       const chords = s.chords.map(slot => {
         if (!slot.root) return slot
@@ -448,10 +424,12 @@ export function useSequencer() {
       melodyRef.current = melody
       return { ...s, chords, melody, keyRoot }
     })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const clearAll = useCallback(() => {
     stop()
+    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
     const chords = makeEmptyChords()
     const melody = makeEmptyMelody()
     chordsRef.current = chords
@@ -461,6 +439,7 @@ export function useSequencer() {
 
   const resetBars = useCallback((numBars: number) => {
     stop()
+    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
     const n = Math.max(1, Math.min(MAX_BARS, numBars))
     const chords = makeEmptyChords(n)
     const melody = makeEmptyMelody(n)
@@ -482,6 +461,7 @@ export function useSequencer() {
     } = {}
   ) => {
     stop()
+    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
     const newChords = [...chords]
     const n = newChords.length
     const newMelody = [...melody]
@@ -508,7 +488,11 @@ export function useSequencer() {
 
   return {
     state,
+    canUndo: pastRef.current.length > 0,
+    canRedo: futureRef.current.length > 0,
+    undo, redo,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, addStrumPattern, fillBarAt, setBarSubdivision, removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
+    setTimeSig, setNoteDuration, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
+    removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
   }
 }
