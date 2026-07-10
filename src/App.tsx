@@ -36,7 +36,7 @@ export default function App() {
 
   // 跨 Tab 联动：其他页面（如识别页"查看指法"）请求切换 Tab
   const changeTabRef = useRef(changeTab)
-  changeTabRef.current = changeTab
+  useEffect(() => { changeTabRef.current = changeTab })
   useEffect(() => onAppEvent<Tab>(EV_SWITCH_TAB, t => changeTabRef.current(t)), [])
 
   function cls(t: Tab, extra = '') {

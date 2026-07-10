@@ -4,6 +4,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/',
+  build: {
+    rollupOptions: {
+      output: {
+        // 和弦数据库（~200KB）独立分包：应用代码更新时用户无需重新下载它
+        manualChunks(id) {
+          if (id.includes('@tombatossals/chords-db')) return 'chords-db'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

@@ -321,8 +321,11 @@ export function parseComposition(raw: string, targetBars?: number): AiCompositio
   if (isStrum) {
     numChords = Math.max(1, Math.min(512, rawChords.length || targetBars || 8))
   } else {
+    // 注意 Number(undefined) 是 NaN 而非 nullish：AI 未返回 bars 字段时必须落到 fallback
     const fallback = rawChords.length || 8
-    numChords = Math.max(1, Math.min(64, targetBars ?? Number(obj.bars) ?? fallback))
+    const aiBars = Number(obj.bars)
+    numChords = Math.max(1, Math.min(64,
+      targetBars ?? (Number.isFinite(aiBars) && aiBars > 0 ? aiBars : fallback)))
   }
 
   const chords = rawChords.slice(0, numChords)

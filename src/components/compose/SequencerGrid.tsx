@@ -45,8 +45,6 @@ interface NotePickerTarget  { bar: number; masterSlot: number; note: MelodyNote 
 const GAP = 2
 
 // Note value denominator → display label
-const NV_LABEL: Record<number, string> = { 1: '', 2: '½', 4: '♩', 8: '♪', 16: '♬' }
-
 interface CellEntry {
   masterSlot: number
   note: MelodyNote | null

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { encodeShareUrl } from '../../utils/shareUrl'
 import { exportMidi } from '../../utils/midiExport'
 import { ROOTS } from '../../utils/dbUtils'
@@ -47,8 +47,13 @@ export default function ControlBar({
 
   // Local text buffer for the BPM input — lets the user type freely (e.g. clear
   // the field, type "80") without each keystroke being clamped back into state.
+  // 外部 bpm 变化时同步缓冲（渲染期调整，避免 effect 级联渲染）。
   const [bpmInput, setBpmInput] = useState(String(bpm))
-  useEffect(() => { setBpmInput(String(bpm)) }, [bpm])
+  const [lastBpm, setLastBpm] = useState(bpm)
+  if (lastBpm !== bpm) {
+    setLastBpm(bpm)
+    setBpmInput(String(bpm))
+  }
 
   function commitBpm() {
     const n = Math.max(40, Math.min(200, Math.round(Number(bpmInput)) || bpm))

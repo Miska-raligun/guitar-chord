@@ -5,7 +5,7 @@ import type { ChordPosition } from '../types/chord'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import { useChordDb } from './useChordDb'
 import {
-  INITIAL_BARS, MAX_BARS, MAX_STRUM_SLOTS, MASTER_SLOTS,
+  MAX_BARS, MAX_STRUM_SLOTS, MASTER_SLOTS,
   BASS, MUTE_BASS, REST, STRUM_DOWN, STRUM_UP, STRUM_MUTE,
   getPatternSteps, getStepsPerBar, getMasterSlotsPerBar, getChordMasterDuration,
   getMasterSPerStep, getFreq, getBassString, semitoneToFreq,
@@ -488,7 +488,11 @@ export function useSequencer() {
 
   return {
     state,
+    // 历史栈只在 setState 的同一批次里变化（push 在 updater 内、undo/redo 自身 setState），
+    // 因此每次渲染读到的长度总是新鲜的——这里读 ref 是安全的。
+    // eslint-disable-next-line react-hooks/refs
     canUndo: pastRef.current.length > 0,
+    // eslint-disable-next-line react-hooks/refs
     canRedo: futureRef.current.length > 0,
     undo, redo,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,

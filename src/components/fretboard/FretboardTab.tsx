@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect, memo } from 'react'
 import { pluckStringAt } from '../../audio/karplusStrong'
 import audioEngine from '../../audio/AudioEngine'
 import { SCALE_OPTIONS, type ScaleKey, SINGLE_DOTS, DOUBLE_DOTS, getNoteInfo } from '../../utils/fretboardUtils'
@@ -69,7 +69,8 @@ interface NoteCellProps {
   onPlay: (freqIdx: number, fret: number, cellKey: string) => void
 }
 
-function NoteCell({ freqIdx, fret, openSemitone, keyRoot, scaleIntervals, activeCell, className, onPlay }: NoteCellProps) {
+// memo：指板一次渲染 ~150 个格子，点击某格只有 activeCell 相关的格子需要重渲染
+const NoteCell = memo(function NoteCell({ freqIdx, fret, openSemitone, keyRoot, scaleIntervals, activeCell, className, onPlay }: NoteCellProps) {
   const semitone = (openSemitone + fret) % 12
   const interval = (semitone - keyRoot + 12) % 12
   const inScale = scaleIntervals === null || scaleIntervals.includes(interval)
@@ -108,7 +109,7 @@ function NoteCell({ freqIdx, fret, openSemitone, keyRoot, scaleIntervals, active
       <span className={`text-xs font-bold leading-none ${botTextClass}`}>{num}</span>
     </button>
   )
-}
+})
 
 // ─── 主组件 ───────────────────────────────────────────────────
 export default function FretboardTab() {
@@ -122,7 +123,7 @@ export default function FretboardTab() {
   const tuningRef = useRef<typeof TUNINGS[number]>(TUNINGS[0])
 
   const currentTuning = TUNINGS.find(t => t.key === tuningKey) ?? TUNINGS[0]
-  tuningRef.current = currentTuning
+  useEffect(() => { tuningRef.current = currentTuning })
 
   const scaleIntervals = SCALE_OPTIONS.find(s => s.key === scaleKey)?.intervals ?? null
 

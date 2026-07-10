@@ -124,7 +124,7 @@ export default function ChordIdentifier() {
             className={`relative ${baseFret === 1 ? 'border-t-[3px] border-zinc-300' : 'border-t border-zinc-600'}`}
             style={{ width: boardW }}
           >
-            {rows.map((fr, r) => (
+            {rows.map(fr => (
               <div key={fr} className="grid grid-cols-6 border-b border-zinc-700" style={{ height: CELL }}>
                 {STRING_NAMES.map((_, s) => {
                   const active = frets[s] === fr

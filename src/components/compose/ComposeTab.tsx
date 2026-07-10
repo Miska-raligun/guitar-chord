@@ -50,9 +50,10 @@ export default function ComposeTab() {
 
   const { isPlaying, bpm, timeSig } = state
 
-  // Keep metronome BPM/time-sig in sync silently
-  useEffect(() => { metronome.syncBpm(bpm) }, [bpm])
-  useEffect(() => { metronome.syncBpb(TS_BEATS[timeSig] ?? 4) }, [timeSig])
+  // Keep metronome BPM/time-sig in sync silently (syncBpm/syncBpb 是稳定的 useCallback)
+  const { syncBpm, syncBpb } = metronome
+  useEffect(() => { syncBpm(bpm) }, [bpm, syncBpm])
+  useEffect(() => { syncBpb(TS_BEATS[timeSig] ?? 4) }, [timeSig, syncBpb])
 
   // On first mount: a share URL wins; otherwise restore the autosaved draft.
   // Only after that does autosaving start (so the initial empty state never
@@ -72,6 +73,8 @@ export default function ComposeTab() {
         })
       }
     }
+    // 挂载时一次性恢复完成后才允许自动保存（不会级联渲染）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraftReady(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

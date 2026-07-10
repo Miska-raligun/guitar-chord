@@ -14,9 +14,14 @@ export default function RecognizeTab() {
 
   const [mode, setMode] = useState<Mode>('mic')
   const [positionIndex, setPositionIndex] = useState(0)
-  useEffect(() => {
+
+  // 和弦变化时重置把位选择（渲染期调整，避免 effect 级联渲染）
+  const chordKey = `${topMatch?.root}|${topMatch?.suffix}`
+  const [lastChordKey, setLastChordKey] = useState(chordKey)
+  if (lastChordKey !== chordKey) {
+    setLastChordKey(chordKey)
     setPositionIndex(0)
-  }, [topMatch?.root, topMatch?.suffix])
+  }
 
   // Stop the mic when leaving mic mode
   useEffect(() => {

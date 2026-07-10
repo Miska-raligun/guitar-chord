@@ -45,6 +45,31 @@ function applyLowpass(out: Float32Array, cutoffHz: number, sampleRate: number): 
   }
 }
 
+// ── Buffer cache ──────────────────────────────────────────────────────────────
+// 合成一个音要跑几十万次采样循环；播放器循环会反复弹同样的音。
+// 按 (频率+全部音色参数) 缓存，每个键存 3 个不同噪声激励的变体轮换使用，
+// 既省掉重复合成，又不会因为波形完全相同而听起来机械。
+const POOL_VARIANTS = 3
+const MAX_CACHE_KEYS = 240
+const bufferCache = new Map<string, { variants: AudioBuffer[]; next: number }>()
+
+function cachedBuffer(key: string, build: () => AudioBuffer): AudioBuffer {
+  let entry = bufferCache.get(key)
+  if (!entry) {
+    if (bufferCache.size >= MAX_CACHE_KEYS) bufferCache.clear()
+    entry = { variants: [], next: 0 }
+    bufferCache.set(key, entry)
+  }
+  if (entry.variants.length < POOL_VARIANTS) {
+    const buf = build()
+    entry.variants.push(buf)
+    return buf
+  }
+  const buf = entry.variants[entry.next]
+  entry.next = (entry.next + 1) % entry.variants.length
+  return buf
+}
+
 // ── Karplus-Strong synthesis ──────────────────────────────────────────────────
 
 function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
@@ -141,7 +166,10 @@ export function pluckStringAt(freq: number, time: number, volume = 0.7): void {
        : cfg.effect === 'overdrive' ? synth.durOverdrive
        : synth.durClean)
     : synth.durAcoustic
-  fireAt(buildKSBuffer(freq, dur), time, volume)
+  // 缓存键覆盖 buildKSBuffer 的全部输入，音色/合成参数一变即自然失效
+  const p = computeKsParams(cfg)
+  const key = `${freq.toFixed(2)}|${dur}|${p.loopFilterA}|${p.decay}|${p.driveAmount}|${p.lpCutoff}|${synth.exciteSmooth}|${synth.fadeOutStart}`
+  fireAt(cachedBuffer(key, () => buildKSBuffer(freq, dur)), time, volume)
 }
 
 export function pluckString(freq: number, volume = 0.8): void {
@@ -149,7 +177,7 @@ export function pluckString(freq: number, volume = 0.8): void {
 }
 
 export function pluckMutedAt(freq: number, time: number, volume = 0.5): void {
-  fireAt(buildKSBufferMuted(freq), time, volume)
+  fireAt(cachedBuffer(`muted|${freq.toFixed(2)}`, () => buildKSBufferMuted(freq)), time, volume)
 }
 
 export function strumMutedAt(position: ChordPosition, time: number): void {

@@ -34,8 +34,14 @@ export default function BrowseTab() {
 
   const customConfig: CustomConfig = { steps: customSteps, timeSig: customTimeSig }
 
-  useEffect(() => {
+  // 和弦变化时重置把位（渲染期调整），停止试听放在 effect 里（副作用）
+  const chordKey = `${selectedRoot}|${selectedSuffix}`
+  const [lastChordKey, setLastChordKey] = useState(chordKey)
+  if (lastChordKey !== chordKey) {
+    setLastChordKey(chordKey)
     setPositionIndex(0)
+  }
+  useEffect(() => {
     stop()
   }, [selectedRoot, selectedSuffix, stop])
 
