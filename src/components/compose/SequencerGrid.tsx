@@ -368,6 +368,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           slot={chordPicker.slot}
           isStrum={chordPicker.isStrum}
           timeSig={timeSig}
+          keyRoot={keyRoot}
           onSelect={slot => onChordChange(chordPicker.chordIdx, slot)}
           onFillBar={onFillBarAt ? slots => onFillBarAt(chordPicker.chordIdx, slots) : undefined}
           onClose={() => setChordPicker(null)}

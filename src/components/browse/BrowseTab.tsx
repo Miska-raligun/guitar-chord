@@ -3,6 +3,7 @@ import { useChordDb } from '../../hooks/useChordDb'
 import { useArpeggio } from '../../hooks/useArpeggio'
 import { onAppEvent, EV_VIEW_CHORD } from '../../utils/appBus'
 import type { ChordRef } from '../../utils/appBus'
+import ChordChangeTrainer from './ChordChangeTrainer'
 import RootSelector from './RootSelector'
 import SuffixSelector from './SuffixSelector'
 import PositionSelector from './PositionSelector'
@@ -137,6 +138,10 @@ export default function BrowseTab() {
           该和弦暂无指法数据
         </div>
       )}
+
+      <div className="flex justify-center">
+        <ChordChangeTrainer currentRoot={selectedRoot} currentSuffix={selectedSuffix} />
+      </div>
     </div>
   )
 }

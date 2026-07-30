@@ -4,11 +4,14 @@ import SuffixSelector from '../browse/SuffixSelector'
 import type { ChordSlot, TimeSig } from '../../types/audio'
 import { useChordDb } from '../../hooks/useChordDb'
 import { STRUM_PRESETS, eighthsPerBar, buildPatternSlots } from '../../data/strumPatterns'
+import { diatonicChords, nextDegreeSuggestions, findDegreeByRoot } from '../../utils/musicTheory'
+import { ROOTS } from '../../utils/dbUtils'
 
 interface Props {
   slot: ChordSlot
   isStrum: boolean
   timeSig: TimeSig
+  keyRoot?: number      // 当前调（提供时显示调内和弦快捷行）
   onSelect: (slot: ChordSlot) => void
   onFillBar?: (slots: ChordSlot[]) => void
   onClose: () => void
@@ -28,12 +31,17 @@ const STRUM_DIR_OPTIONS: { v: 'D'|'U'|'X'; label: string; title: string }[] = [
   { v: 'X', label: '✕', title: '闷音 / 切音' },
 ]
 
-export default function ChordCellPicker({ slot, isStrum, timeSig, onSelect, onFillBar, onClose }: Props) {
+export default function ChordCellPicker({ slot, isStrum, timeSig, keyRoot, onSelect, onFillBar, onClose }: Props) {
   const { suffixes } = useChordDb()
   const [root,      setRoot]      = useState(slot.root ?? 'C')
   const [suffix,    setSuffix]    = useState(slot.suffix ?? 'major')
   const [noteValue, setNoteValue] = useState<1|2|4|8|16>(slot.noteValue ?? 1)
   const [strumDir,  setStrumDir]  = useState<'D'|'U'|'X'>(slot.strumDir ?? 'D')
+
+  // 调内和弦快捷行：当前选中和弦对应的级数 + 常接级数建议
+  const diatonic = keyRoot !== undefined ? diatonicChords(keyRoot) : null
+  const curDegree = (diatonic && root) ? findDegreeByRoot(keyRoot!, ROOTS.indexOf(root as typeof ROOTS[number])) : null
+  const suggested = curDegree ? new Set(nextDegreeSuggestions(curDegree.degree)) : new Set<number>()
 
   function commit(r: string, s: string, nv: 1|2|4|8|16, dir: 'D'|'U'|'X') {
     onSelect({
@@ -84,6 +92,44 @@ export default function ChordCellPicker({ slot, isStrum, timeSig, onSelect, onFi
             <button onClick={onClose} className="py-2 px-3 rounded-lg text-zinc-400 text-sm hover:text-zinc-200 hover:bg-zinc-800">确定</button>
           </div>
         </div>
+
+        {/* 调内和弦快捷行：级数标注 + 常接建议（琥珀色边框） */}
+        {diatonic && (
+          <div className="mb-3">
+            <div className="text-xs text-zinc-500 mb-1.5">
+              {ROOTS[keyRoot!]} 大调调内和弦
+              {curDegree && <span className="ml-2 text-zinc-400">当前 {curDegree.numeral} 级 · 亮框为常接和弦</span>}
+            </div>
+            <div className="flex gap-1.5">
+              {diatonic.map(dc => {
+                const name = `${ROOTS[dc.root]}${dc.suffix === 'minor' ? 'm' : dc.suffix === 'dim' ? '°' : ''}`
+                const isCur = curDegree?.degree === dc.degree
+                const isSuggested = suggested.has(dc.degree)
+                return (
+                  <button
+                    key={dc.degree}
+                    onClick={() => {
+                      setRoot(ROOTS[dc.root])
+                      setSuffix(dc.suffix)
+                      commit(ROOTS[dc.root], dc.suffix, noteValue, strumDir)
+                    }}
+                    title={`${dc.numeral} 级`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium flex flex-col items-center leading-tight transition-all border ${
+                      isCur
+                        ? 'bg-amber-500 text-zinc-950 border-amber-500'
+                        : isSuggested
+                          ? 'bg-zinc-800 text-amber-300 border-amber-500/60 hover:bg-zinc-700'
+                          : 'bg-zinc-800 text-zinc-300 border-transparent hover:bg-zinc-700'
+                    }`}
+                  >
+                    <span>{name}</span>
+                    <span className={`text-[9px] ${isCur ? 'text-zinc-800' : 'text-zinc-500'}`}>{dc.numeral}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Note value + strum direction selectors — strum mode only */}
         {isStrum && (
