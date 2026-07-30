@@ -72,16 +72,14 @@ function cachedBuffer(key: string, build: () => AudioBuffer): AudioBuffer {
 
 // ── Karplus-Strong synthesis ──────────────────────────────────────────────────
 
-function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
-  const params = computeKsParams(getToneConfig())
-  const { loopFilterA, decay, driveAmount, lpCutoff } = params
-
-  const ctx = audioEngine.getContext()
-  const sr  = ctx.sampleRate
-  const N   = Math.max(2, Math.round(sr / freq))
-  const total = Math.floor(sr * durationSec)
-
+// 纯采样生成（不依赖 AudioContext）——实时播放和离线导出 WAV 共用同一套合成，
+// 保证导出的音频和听到的完全一致。
+export function renderKSSamples(freq: number, durationSec: number, sampleRate: number): Float32Array<ArrayBuffer> {
+  const { loopFilterA, decay, driveAmount, lpCutoff } = computeKsParams(getToneConfig())
   const synth = getSynthConfig()
+
+  const N     = Math.max(2, Math.round(sampleRate / freq))
+  const total = Math.floor(sampleRate * durationSec)
 
   const delay = new Float32Array(N)
   for (let i = 0; i < N; i++) delay[i] = Math.random() * 2 - 1
@@ -101,7 +99,7 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
   }
 
   applyDrive(out, driveAmount)
-  applyLowpass(out, lpCutoff, sr)
+  applyLowpass(out, lpCutoff, sampleRate)
 
   // Fade out the tail — prevents abrupt cutoff and reduces overlap buildup
   const fadeStart = Math.floor(total * synth.fadeOutStart)
@@ -109,8 +107,24 @@ function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
     const t = (i - fadeStart) / (total - fadeStart)
     out[i] *= (1 - t) * (1 - t)
   }
+  return out
+}
 
-  const buf = ctx.createBuffer(1, total, sr)
+// 当前音色下一次拨弦的时长（导出时需要和播放一致）
+export function pluckDuration(): number {
+  const cfg   = getToneConfig()
+  const synth = getSynthConfig()
+  return cfg.mode === 'electric'
+    ? (cfg.effect === 'distortion' ? synth.durDistortion
+       : cfg.effect === 'overdrive' ? synth.durOverdrive
+       : synth.durClean)
+    : synth.durAcoustic
+}
+
+function buildKSBuffer(freq: number, durationSec: number): AudioBuffer {
+  const ctx = audioEngine.getContext()
+  const out = renderKSSamples(freq, durationSec, ctx.sampleRate)
+  const buf = ctx.createBuffer(1, out.length, ctx.sampleRate)
   buf.copyToChannel(out, 0)
   return buf
 }
@@ -161,11 +175,7 @@ function fireAt(buf: AudioBuffer, time: number, volume: number): void {
 export function pluckStringAt(freq: number, time: number, volume = 0.7): void {
   const cfg   = getToneConfig()
   const synth = getSynthConfig()
-  const dur = cfg.mode === 'electric'
-    ? (cfg.effect === 'distortion' ? synth.durDistortion
-       : cfg.effect === 'overdrive' ? synth.durOverdrive
-       : synth.durClean)
-    : synth.durAcoustic
+  const dur = pluckDuration()
   // 缓存键覆盖 buildKSBuffer 的全部输入，音色/合成参数一变即自然失效
   const p = computeKsParams(cfg)
   const key = `${freq.toFixed(2)}|${dur}|${p.loopFilterA}|${p.decay}|${p.driveAmount}|${p.lpCutoff}|${synth.exciteSmooth}|${synth.fadeOutStart}`

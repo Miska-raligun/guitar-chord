@@ -193,6 +193,7 @@ export default function ComposeTab() {
         onLoopRangeChange={setLoopRange}
         rampOn={rampOn}
         onRampChange={setRampOn}
+        onImportMidi={r => loadComposition(r.chords, r.melody, { bpm: r.bpm, timeSig: r.timeSig })}
       />
 
       {/* ── Action row (AI / Save / Library) ── */}

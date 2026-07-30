@@ -57,6 +57,67 @@ function fromBase64url(b64: string): string {
   return new TextDecoder().decode(bytes)
 }
 
+// ── LZ 压缩 ──────────────────────────────────────────────────────────────────
+// 紧凑 JSON 里 "[7,0,8]," 这类片段大量重复，LZ77 式的滑窗压缩能显著缩短链接。
+// 输出限制在 ASCII 范围内，便于继续走 base64url。
+// 格式：字面量 = 该字符本身（0x20-0x7e）；匹配 = \x01 + len(0x20+) + dist_hi + dist_lo
+const LZ_MARK = '\u0001'
+const MIN_MATCH = 4
+const MAX_MATCH = 90   // 保证 0x20+len 仍在 ASCII 内
+const WINDOW = 4095
+
+function lzCompress(s: string): string {
+  let out = ''
+  let i = 0
+  while (i < s.length) {
+    let bestLen = 0
+    let bestDist = 0
+    const start = Math.max(0, i - WINDOW)
+    // 以 MIN_MATCH 长度的片段做候选起点搜索（lastIndexOf 由引擎优化，足够快）
+    if (i + MIN_MATCH <= s.length) {
+      const probe = s.slice(i, i + MIN_MATCH)
+      let at = s.indexOf(probe, start)
+      while (at !== -1 && at < i) {
+        let len = MIN_MATCH
+        while (len < MAX_MATCH && i + len < s.length && s[at + len] === s[i + len]) len++
+        if (len > bestLen) { bestLen = len; bestDist = i - at }
+        if (bestLen >= MAX_MATCH) break
+        at = s.indexOf(probe, at + 1)
+      }
+    }
+    const ch = s[i]
+    if (bestLen >= MIN_MATCH) {
+      out += LZ_MARK
+           + String.fromCharCode(0x20 + bestLen)
+           + String.fromCharCode(0x20 + (bestDist >> 6))
+           + String.fromCharCode(0x20 + (bestDist & 0x3f))
+      i += bestLen
+    } else if (ch === LZ_MARK) {
+      out += LZ_MARK + String.fromCharCode(0x20)   // 转义：len=0 表示字面量 \x01
+      i++
+    } else {
+      out += ch
+      i++
+    }
+  }
+  return out
+}
+
+function lzDecompress(s: string): string {
+  let out = ''
+  let i = 0
+  while (i < s.length) {
+    if (s[i] !== LZ_MARK) { out += s[i++]; continue }
+    const len = s.charCodeAt(i + 1) - 0x20
+    if (len === 0) { out += LZ_MARK; i += 2; continue }
+    const dist = ((s.charCodeAt(i + 2) - 0x20) << 6) | (s.charCodeAt(i + 3) - 0x20)
+    const from = out.length - dist
+    for (let k = 0; k < len; k++) out += out[from + k]
+    i += 4
+  }
+  return out
+}
+
 // ── encode ───────────────────────────────────────────────────────────────────
 
 export function encodeShareUrl(state: SharePayload): string {
@@ -92,7 +153,12 @@ export function encodeShareUrl(state: SharePayload): string {
     })
   })
 
-  const encoded = toBase64url(JSON.stringify(compact))
+  // "z" 前缀标记压缩格式；压缩没变短就退回明文（短曲子常见）
+  const json = JSON.stringify(compact)
+  const packed = lzCompress(json)
+  const encoded = packed.length < json.length
+    ? 'z' + toBase64url(packed)
+    : toBase64url(json)
   const url = new URL(window.location.href)
   url.search = `?s=${encoded}`
   return url.toString()
@@ -102,7 +168,10 @@ export function encodeShareUrl(state: SharePayload): string {
 
 export function decodeShareUrl(encoded: string): SharePayload | null {
   try {
-    const obj = JSON.parse(fromBase64url(encoded))
+    const raw = encoded.startsWith('z')
+      ? lzDecompress(fromBase64url(encoded.slice(1)))
+      : fromBase64url(encoded)
+    const obj = JSON.parse(raw)
 
     // Detect compact format (has numeric `p` field) vs old verbose format
     if (typeof obj.p === 'number') {

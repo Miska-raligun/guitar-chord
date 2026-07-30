@@ -1,9 +1,14 @@
 import { useState, useRef } from 'react'
 import { encodeShareUrl } from '../../utils/shareUrl'
 import { exportMidi } from '../../utils/midiExport'
+import { downloadWav } from '../../utils/audioExport'
+import { renderTab } from '../../utils/tabExport'
+import { readMidiFile } from '../../utils/midiImport'
 import { ROOTS } from '../../utils/dbUtils'
+import { useChordDb } from '../../hooks/useChordDb'
 import { IconShare, IconMetronome, IconMidi } from '../ui/icons'
-import type { SequencerState, TimeSig } from '../../types/audio'
+import TabViewModal from './TabViewModal'
+import type { SequencerState, TimeSig, ChordSlot, MelodyNote } from '../../types/audio'
 import type { useMetronome } from '../../hooks/useMetronome'
 import type { LoopRange } from '../../hooks/useSequencer'
 
@@ -44,15 +49,55 @@ interface Props {
   onLoopRangeChange: (r: LoopRange | null) => void
   rampOn: boolean
   onRampChange: (on: boolean) => void
+  onImportMidi: (r: { bpm: number; timeSig: TimeSig; chords: ChordSlot[]; melody: (MelodyNote | null)[][] }) => void
 }
 
 export default function ControlBar({
   state, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, setCapo,
   transpose, metronome, canUndo, canRedo, onUndo, onRedo,
-  countIn, onCountInChange, loopRange, onLoopRangeChange, rampOn, onRampChange,
+  countIn, onCountInChange, loopRange, onLoopRangeChange, rampOn, onRampChange, onImportMidi,
 }: Props) {
   const { bpm, pattern, keyRoot, timeSig, noteDuration, capo } = state
   const [shareCopied, setShareCopied] = useState(false)
+  const [tabText, setTabText] = useState<string | null>(null)
+  const [wavBusy, setWavBusy] = useState(false)
+  const { getChordEntry } = useChordDb()
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  function positionOf(slot: ChordSlot) {
+    if (!slot.root || !slot.suffix) return null
+    return getChordEntry(slot.root, slot.suffix)?.positions[slot.positionIndex] ?? null
+  }
+
+  async function handleWav() {
+    setWavBusy(true)
+    // 让按钮先渲染出"导出中"，再跑同步的离线渲染
+    await new Promise(r => setTimeout(r, 30))
+    try {
+      downloadWav({
+        bpm: state.bpm, pattern: state.pattern, timeSig: state.timeSig, capo: state.capo,
+        chords: state.chords, melody: state.melody, getPosition: positionOf,
+      })
+    } finally {
+      setWavBusy(false)
+    }
+  }
+
+  function handleTab() {
+    setTabText(renderTab({
+      pattern: state.pattern, timeSig: state.timeSig, capo: state.capo,
+      chords: state.chords, melody: state.melody, getPosition: positionOf,
+    }))
+  }
+
+  async function handleMidiFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const r = await readMidiFile(f)
+    if (!r) { alert('无法解析该 MIDI 文件') ; return }
+    onImportMidi(r)
+  }
 
   // TAP 测速：连点按钮取平均间隔
   const tapsRef = useRef<number[]>([])
@@ -266,6 +311,33 @@ export default function ControlBar({
           </button>
 
           <button
+            onClick={() => fileRef.current?.click()}
+            title="导入 MIDI 文件的旋律"
+            className="px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700"
+          >导入</button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".mid,.midi,audio/midi"
+            onChange={handleMidiFile}
+            className="hidden"
+            aria-hidden="true"
+          />
+
+          <button
+            onClick={handleWav}
+            disabled={wavBusy}
+            title="导出为 WAV 音频"
+            className="px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+          >{wavBusy ? '导出中…' : 'WAV'}</button>
+
+          <button
+            onClick={handleTab}
+            title="查看六线谱"
+            className="px-2.5 py-1 rounded-md bg-zinc-800 text-zinc-400 text-xs hover:text-zinc-200 hover:bg-zinc-700"
+          >六线谱</button>
+
+          <button
             onClick={handleShare}
             title="复制分享链接"
             className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
@@ -334,6 +406,8 @@ export default function ControlBar({
           )}
         </div>
       </div>
+
+      {tabText !== null && <TabViewModal text={tabText} onClose={() => setTabText(null)} />}
     </>
   )
 }
