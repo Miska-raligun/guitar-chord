@@ -7,6 +7,7 @@ import BrowseTab from './components/browse/BrowseTab'
 import FretboardTab from './components/fretboard/FretboardTab'
 import ComposeTab from './components/compose/ComposeTab'
 import ErrorBoundary from './components/ui/ErrorBoundary'
+import Onboarding, { hasOnboarded } from './components/ui/Onboarding'
 
 const TAB_KEY = 'guitar-chord-active-tab'
 const VALID_TABS: Tab[] = ['recognize', 'browse', 'fretboard', 'compose']
@@ -22,6 +23,10 @@ function loadTab(): Tab {
 export default function App() {
   const [tab,      setTab]      = useState<Tab>(loadTab)
   const [enterTab, setEnterTab] = useState<Tab | null>(null)
+  // 分享链接打开时不弹引导，避免挡住别人分享的编曲
+  const [showIntro, setShowIntro] = useState(
+    () => !hasOnboarded() && !new URLSearchParams(window.location.search).has('s')
+  )
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function changeTab(next: Tab) {
@@ -64,6 +69,7 @@ export default function App() {
           <ErrorBoundary label="编曲台"><ComposeTab /></ErrorBoundary>
         </div>
       </main>
+      {showIntro && <Onboarding onClose={() => setShowIntro(false)} />}
     </div>
   )
 }

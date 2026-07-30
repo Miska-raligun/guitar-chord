@@ -16,6 +16,23 @@ function formatDate(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
 }
 
+// 曲目摘要：小节数、旋律音数、和弦走向预览
+function summarize(item: SavedComposition): { bars: number; notes: number; progression: string } {
+  const bars = item.chords.reduce((acc, c) => acc + 1 / (c.noteValue ?? 1), 0)
+  const notes = item.melody.reduce((acc, row) => acc + row.filter(Boolean).length, 0)
+  const names: string[] = []
+  for (const c of item.chords) {
+    if (!c.root) continue
+    const n = `${c.root}${c.suffix && c.suffix !== 'major' ? (c.suffix === 'minor' ? 'm' : c.suffix) : ''}`
+    if (names[names.length - 1] !== n) names.push(n)
+    if (names.length > 5) break
+  }
+  const progression = names.length
+    ? names.slice(0, 4).join(' → ') + (names.length > 4 ? ' …' : '')
+    : '（空）'
+  return { bars: Math.round(bars), notes, progression }
+}
+
 interface Props {
   list: SavedComposition[]
   onLoad: (item: SavedComposition) => void
@@ -117,7 +134,9 @@ export default function SavedList({ list, onLoad, onDelete, onExport, onImport, 
           </p>
         ) : (
           <div className="overflow-y-auto scrollbar-none" style={{ maxHeight: 'calc(70vh - 52px)' }}>
-            {list.map(item => (
+            {list.map(item => {
+              const s = summarize(item)
+              return (
               <div
                 key={item.id}
                 className="flex items-center gap-3 px-4 py-3.5 border-b border-zinc-800/50 hover:bg-zinc-800/30"
@@ -130,15 +149,21 @@ export default function SavedList({ list, onLoad, onDelete, onExport, onImport, 
                   <div className="text-xs text-zinc-500 mt-0.5 font-mono">
                     {ROOT_NAMES[item.keyRoot]} · {PATTERN_LABEL[item.pattern] ?? item.pattern} · {item.bpm} BPM · {formatDate(item.savedAt)}
                   </div>
+                  <div className="text-[11px] text-zinc-600 mt-0.5 truncate">
+                    {s.bars} 小节{s.notes > 0 && ` · ${s.notes} 个旋律音`}
+                    {item.capo ? ` · Capo ${item.capo}` : ''} · {s.progression}
+                  </div>
                 </button>
                 <button
                   onClick={() => onDelete(item.id)}
+                  aria-label={`删除 ${item.name}`}
                   className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-400/10"
                 >
                   <IconX className="w-3.5 h-3.5" />
                 </button>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

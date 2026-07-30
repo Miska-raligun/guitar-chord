@@ -70,6 +70,7 @@ export default function TonePanel({ onClose }: Props) {
           <span className="text-sm font-semibold text-zinc-100">音色设置</span>
           <button
             onClick={onClose}
+            aria-label="关闭音色设置"
             className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors"
           >
             <IconX />

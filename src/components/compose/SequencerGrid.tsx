@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../../types/audio'
 import { getMasterSlotsPerBar, getChordMasterDuration } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
@@ -122,6 +122,127 @@ function makeBar(barNum: number, slots: BarSlotRef[]): BarGroup {
   return { barNum, firstIdx: slots[0].index, slots, uniformNv: uniform }
 }
 
+// 单个小节块（扫弦模式）。memo 后播放时只有"当前小节"变化的那两块会重渲染，
+// 而不是整个网格——64 小节细分后可能有几百个格子。
+interface BarBlockProps {
+  bar: BarGroup
+  timeSig: TimeSig
+  noteDuration: SequencerState['noteDuration']
+  melody: (MelodyNote | null)[][]
+  activeIndex: number     // 属于本小节的当前播放事件下标，否则 -1
+  solfegeLabel: (n: MelodyNote | null) => string
+  onOpenChord: (chordIdx: number, slot: ChordSlot, isStrum: boolean) => void
+  onOpenNote: (bar: number, masterSlot: number, note: MelodyNote | null) => void
+  onSetBarSubdivision?: (firstChordIdx: number, noteValue: 1|2|4|8|16) => void
+}
+
+const BarBlock = memo(function BarBlock({
+  bar, timeSig, noteDuration, melody, activeIndex,
+  solfegeLabel, onOpenChord, onOpenNote, onSetBarSubdivision,
+}: BarBlockProps) {
+  const barActive = activeIndex >= 0
+
+  const melodyCells: { chordIdx: number; entry: CellEntry }[] = []
+  bar.slots.forEach(({ slot, index }) => {
+    const dur = getChordMasterDuration(slot, timeSig)
+    renderBarCells(melody[index] ?? [], noteDuration, dur).forEach(entry =>
+      melodyCells.push({ chordIdx: index, entry })
+    )
+  })
+
+  return (
+    <div className="flex flex-col gap-1" data-active-bar={barActive ? 'true' : undefined}>
+      {/* 小节头：编号 + 细分档位 */}
+      <div className="flex items-center justify-between gap-2">
+        <span className={`text-[10px] ${barActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
+          第 {bar.barNum} 小节
+        </span>
+        {onSetBarSubdivision && (
+          <div className="flex gap-0.5">
+            {NV_ADD.map(({ v, label, title }) => (
+              <button
+                key={v}
+                title={`细分：${title}`}
+                onClick={() => onSetBarSubdivision(bar.firstIdx, v)}
+                className={`w-6 h-6 rounded text-[11px] transition-colors ${
+                  bar.uniformNv === v
+                    ? 'bg-amber-500 text-zinc-950 font-semibold'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 和弦小格（按时值宽度切分） */}
+      <div className="flex w-full" style={{ gap: `${GAP}px` }}>
+        {bar.slots.map(({ slot, index }) => {
+          const dur = getChordMasterDuration(slot, timeSig)
+          const isActive = index === activeIndex
+          const hasChord = slot.root !== null
+          const dirGlyph = hasChord ? DIR_GLYPH[slot.strumDir ?? 'D'] : ''
+          return (
+            <button
+              key={index}
+              style={{ flex: dur, minWidth: 0 }}
+              onClick={() => onOpenChord(index, slot, true)}
+              aria-label={hasChord ? `和弦 ${slot.root}${slot.suffix && slot.suffix !== 'major' ? slot.suffix : ''}，第 ${bar.barNum} 小节` : `空白和弦格，第 ${bar.barNum} 小节`}
+              className={`h-14 rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center overflow-hidden px-0.5 ${
+                isActive
+                  ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
+                  : hasChord
+                    ? 'border-zinc-600 bg-zinc-800 hover:border-zinc-500'
+                    : 'border-zinc-700 border-dashed bg-zinc-900 hover:border-zinc-600'
+              }`}
+            >
+              {hasChord ? (
+                <>
+                  <span className={`leading-none truncate max-w-full ${isActive ? 'text-amber-400' : 'text-zinc-100'}`}>{slot.root}</span>
+                  {slot.suffix && slot.suffix !== 'major' && (
+                    <span className="text-[9px] text-zinc-500 leading-tight truncate max-w-full">{slot.suffix}</span>
+                  )}
+                  {dirGlyph && <span className="text-[9px] text-amber-400/70 leading-none mt-0.5">{dirGlyph}</span>}
+                </>
+              ) : (
+                <span className="text-zinc-500 text-xs">+</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 旋律行（贯穿整小节） */}
+      <div className="flex w-full" style={{ gap: `${GAP}px` }}>
+        {melodyCells.map(({ chordIdx, entry }, i) => {
+          const { masterSlot, note, flex } = entry
+          const label = solfegeLabel(note)
+          return (
+            <button
+              key={`${chordIdx}-${masterSlot}-${i}`}
+              style={{ flex, minWidth: 0 }}
+              onClick={() => onOpenNote(chordIdx, masterSlot, note)}
+              aria-label={note ? `旋律音 ${label}，第 ${masterSlot + 1} 格` : `空白旋律格，第 ${masterSlot + 1} 格`}
+              className={`h-10 rounded text-[9px] font-bold transition-colors flex flex-col items-center justify-center overflow-hidden gap-px ${
+                note ? 'bg-amber-500/80 text-zinc-950' : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
+              }`}
+            >
+              <span>{label || '·'}</span>
+              {note && note.fret !== undefined && note.string !== undefined && (
+                <span className="text-[7px] leading-none opacity-75">
+                  {STRING_LABELS[note.string]}{note.fret}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+
 export default function SequencerGrid({ state, onChordChange, onMelodyChange, onAddBar, onAddStrumPattern, onFillBarAt, onSetBarSubdivision }: Props) {
   const [chordPicker, setChordPicker] = useState<ChordPickerTarget | null>(null)
   const [notePicker,  setNotePicker]  = useState<NotePickerTarget | null>(null)
@@ -129,13 +250,25 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
   const { chords, melody, currentBar, keyRoot, noteDuration, timeSig, pattern } = state
   const masterSlotsPerBar = getMasterSlotsPerBar(timeSig)
   const isStrum = pattern === 'strum'
-  const barNumbers = computeBarNumbers(chords)
+  const barNumbers = useMemo(() => computeBarNumbers(chords), [chords])
+  // 分组只在和弦/拍号变化时重算——播放时每秒多次的 currentBar 变化不再触发
+  const bars = useMemo(() => groupIntoBars(chords, timeSig), [chords, timeSig])
 
-  function solfegeLabel(note: MelodyNote | null): string {
+  const solfegeLabel = useCallback((note: MelodyNote | null): string => {
     if (!note) return ''
     const offset = ((note.semitone - keyRoot) % 12 + 12) % 12
     return SOLFEGE[offset]
-  }
+  }, [keyRoot])
+
+  const openChordPicker = useCallback((chordIdx: number, slot: ChordSlot, strum: boolean) => {
+    setNotePicker(null)
+    setChordPicker({ chordIdx, slot, isStrum: strum })
+  }, [])
+
+  const openNotePicker = useCallback((bar: number, masterSlot: number, note: MelodyNote | null) => {
+    setChordPicker(null)
+    setNotePicker({ bar, masterSlot, note })
+  }, [])
 
   // 播放跟随：当前小节滚入可视区域
   useEffect(() => {
@@ -152,7 +285,8 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
       <button
         key={key}
         style={{ flex, minWidth: 0 }}
-        onClick={() => { setChordPicker(null); setNotePicker({ bar: chordIdx, masterSlot, note }) }}
+        onClick={() => openNotePicker(chordIdx, masterSlot, note)}
+        aria-label={note ? `旋律音 ${label}，第 ${masterSlot + 1} 格` : `空白旋律格，第 ${masterSlot + 1} 格`}
         className={`h-10 rounded text-[9px] font-bold transition-colors flex flex-col items-center justify-center overflow-hidden gap-px ${
           note ? 'bg-amber-500/80 text-zinc-950' : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
         }`}
@@ -169,92 +303,22 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
 
   // ── 扫弦模式：按小节分组，每小节一整块，按时值细分为多个和弦小格 ──
   function renderStrum() {
-    const bars = groupIntoBars(chords, timeSig)
     return (
       <div className="flex flex-col gap-4 px-4">
-        {bars.map(bar => {
-          const barActive = bar.slots.some(r => r.index === currentBar)
-          // 拼出整小节连续的旋律小格
-          const melodyCells: { chordIdx: number; entry: CellEntry }[] = []
-          bar.slots.forEach(({ slot, index }) => {
-            const dur = getChordMasterDuration(slot, timeSig)
-            renderBarCells(melody[index] ?? [], noteDuration, dur).forEach(entry =>
-              melodyCells.push({ chordIdx: index, entry })
-            )
-          })
-
-          return (
-            <div key={bar.firstIdx} className="flex flex-col gap-1" data-active-bar={barActive ? 'true' : undefined}>
-              {/* 小节头：编号 + 细分档位 */}
-              <div className="flex items-center justify-between gap-2">
-                <span className={`text-[10px] ${barActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
-                  第 {bar.barNum} 小节
-                </span>
-                {onSetBarSubdivision && (
-                  <div className="flex gap-0.5">
-                    {NV_ADD.map(({ v, label, title }) => (
-                      <button
-                        key={v}
-                        title={`细分：${title}`}
-                        onClick={() => onSetBarSubdivision(bar.firstIdx, v)}
-                        className={`w-6 h-6 rounded text-[11px] transition-colors ${
-                          bar.uniformNv === v
-                            ? 'bg-amber-500 text-zinc-950 font-semibold'
-                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 和弦小格（按时值宽度切分） */}
-              <div className="flex w-full" style={{ gap: `${GAP}px` }}>
-                {bar.slots.map(({ slot, index }) => {
-                  const dur = getChordMasterDuration(slot, timeSig)
-                  const isActive = index === currentBar
-                  const hasChord = slot.root !== null
-                  const dirGlyph = hasChord ? DIR_GLYPH[slot.strumDir ?? 'D'] : ''
-                  return (
-                    <button
-                      key={index}
-                      style={{ flex: dur, minWidth: 0 }}
-                      onClick={() => { setNotePicker(null); setChordPicker({ chordIdx: index, slot, isStrum }) }}
-                      className={`h-14 rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center overflow-hidden px-0.5 ${
-                        isActive
-                          ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
-                          : hasChord
-                            ? 'border-zinc-600 bg-zinc-800 hover:border-zinc-500'
-                            : 'border-zinc-700 border-dashed bg-zinc-900 hover:border-zinc-600'
-                      }`}
-                    >
-                      {hasChord ? (
-                        <>
-                          <span className={`leading-none truncate max-w-full ${isActive ? 'text-amber-400' : 'text-zinc-100'}`}>{slot.root}</span>
-                          {slot.suffix && slot.suffix !== 'major' && (
-                            <span className="text-[9px] text-zinc-500 leading-tight truncate max-w-full">{slot.suffix}</span>
-                          )}
-                          {dirGlyph && <span className="text-[9px] text-amber-400/70 leading-none mt-0.5">{dirGlyph}</span>}
-                        </>
-                      ) : (
-                        <span className="text-zinc-500 text-xs">+</span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* 旋律行（贯穿整小节） */}
-              <div className="flex w-full" style={{ gap: `${GAP}px` }}>
-                {melodyCells.map(({ chordIdx, entry }, i) =>
-                  melodyCell(chordIdx, entry, `${chordIdx}-${entry.masterSlot}-${i}`),
-                )}
-              </div>
-            </div>
-          )
-        })}
+        {bars.map(bar => (
+          <BarBlock
+            key={bar.firstIdx}
+            bar={bar}
+            timeSig={timeSig}
+            noteDuration={noteDuration}
+            melody={melody}
+            activeIndex={bar.slots.some(r => r.index === currentBar) ? currentBar : -1}
+            solfegeLabel={solfegeLabel}
+            onOpenChord={openChordPicker}
+            onOpenNote={openNotePicker}
+            onSetBarSubdivision={onSetBarSubdivision}
+          />
+        ))}
 
         {/* 添加控件 */}
         <div className="pt-1 space-y-3">
@@ -312,7 +376,8 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
               </div>
 
               <button
-                onClick={() => { setNotePicker(null); setChordPicker({ chordIdx, slot, isStrum }) }}
+                onClick={() => openChordPicker(chordIdx, slot, isStrum)}
+                aria-label={hasChord ? `和弦 ${slot.root}${slot.suffix && slot.suffix !== 'major' ? slot.suffix : ''}，第 ${barNum} 小节` : `空白和弦格，第 ${barNum} 小节`}
                 className={`w-full h-14 rounded-lg border text-sm font-semibold transition-all flex flex-col items-center justify-center ${
                   isActive
                     ? 'border-amber-400 ring-2 ring-amber-400/40 bg-zinc-800'
