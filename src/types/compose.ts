@@ -16,6 +16,7 @@ export interface SavedComposition {
   keyRoot: number
   timeSig?: TimeSig
   noteDuration?: 1 | 2 | 4 | 8 | 16
+  capo?: number
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
 }

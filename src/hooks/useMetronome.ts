@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import audioEngine from '../audio/AudioEngine'
 
-function scheduleClick(ctx: AudioContext, time: number, accent: boolean) {
+export function scheduleClick(ctx: AudioContext, time: number, accent: boolean) {
   const osc  = ctx.createOscillator()
   const gain = ctx.createGain()
   osc.connect(gain)

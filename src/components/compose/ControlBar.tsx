@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { encodeShareUrl } from '../../utils/shareUrl'
 import { exportMidi } from '../../utils/midiExport'
 import { ROOTS } from '../../utils/dbUtils'
 import { IconShare, IconMetronome, IconMidi } from '../ui/icons'
 import type { SequencerState, TimeSig } from '../../types/audio'
 import type { useMetronome } from '../../hooks/useMetronome'
+import type { LoopRange } from '../../hooks/useSequencer'
 
 const PATTERNS: { id: SequencerState['pattern']; label: string }[] = [
   { id: '53231323', label: '民谣' },
@@ -30,20 +31,51 @@ interface Props {
   setKeyRoot: (k: number) => void
   setTimeSig: (ts: TimeSig) => void
   setNoteDuration: (d: SequencerState['noteDuration']) => void
+  setCapo: (capo: number) => void
   transpose: (semitones: number) => void
   metronome: ReturnType<typeof useMetronome>
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  countIn: boolean
+  onCountInChange: (on: boolean) => void
+  loopRange: LoopRange | null
+  onLoopRangeChange: (r: LoopRange | null) => void
+  rampOn: boolean
+  onRampChange: (on: boolean) => void
 }
 
 export default function ControlBar({
-  state, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration,
+  state, setBpm, setPattern, setKeyRoot, setTimeSig, setNoteDuration, setCapo,
   transpose, metronome, canUndo, canRedo, onUndo, onRedo,
+  countIn, onCountInChange, loopRange, onLoopRangeChange, rampOn, onRampChange,
 }: Props) {
-  const { bpm, pattern, keyRoot, timeSig, noteDuration } = state
+  const { bpm, pattern, keyRoot, timeSig, noteDuration, capo } = state
   const [shareCopied, setShareCopied] = useState(false)
+
+  // TAP 测速：连点按钮取平均间隔
+  const tapsRef = useRef<number[]>([])
+  function handleTap() {
+    const now = performance.now()
+    const taps = tapsRef.current
+    if (taps.length && now - taps[taps.length - 1] > 2000) taps.length = 0  // 停顿超 2 秒重新开始
+    taps.push(now)
+    if (taps.length > 6) taps.shift()
+    if (taps.length >= 2) {
+      const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1)
+      setBpm(Math.max(40, Math.min(200, Math.round(60000 / avg))))
+    }
+  }
+
+  // 循环区间输入缓冲
+  const totalBars = Math.max(1, state.chords.reduce((acc, c) => acc + 1 / (c.noteValue ?? 1), 0))
+  function updateLoop(part: 'start' | 'end', v: number) {
+    const cur = loopRange ?? { start: 1, end: Math.ceil(totalBars) }
+    const next = { ...cur, [part]: Math.max(1, Math.min(64, Math.round(v) || 1)) }
+    if (next.end < next.start) next.end = next.start
+    onLoopRangeChange(next)
+  }
 
   // Local text buffer for the BPM input — lets the user type freely (e.g. clear
   // the field, type "80") without each keystroke being clamped back into state.
@@ -70,7 +102,7 @@ export default function ControlBar({
   }
 
   function handleMidi() {
-    exportMidi({ bpm: state.bpm, timeSig: state.timeSig, chords: state.chords, melody: state.melody })
+    exportMidi({ bpm: state.bpm, timeSig: state.timeSig, chords: state.chords, melody: state.melody, capo: state.capo })
   }
 
   return (
@@ -86,6 +118,21 @@ export default function ControlBar({
             className="bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none focus:border-amber-500"
           >
             {ROOTS.map((r, i) => <option key={r} value={i}>{r}</option>)}
+          </select>
+        </div>
+
+        {/* Capo */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">CAPO</span>
+          <select
+            value={capo}
+            onChange={e => setCapo(Number(e.target.value))}
+            aria-label="变调夹品位"
+            className="bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none focus:border-amber-500"
+          >
+            {Array.from({ length: 8 }, (_, i) => (
+              <option key={i} value={i}>{i === 0 ? '无' : `${i}品`}</option>
+            ))}
           </select>
         </div>
 
@@ -139,6 +186,11 @@ export default function ControlBar({
             onKeyDown={e => { if (e.key === 'Enter') commitBpm() }}
             className="w-14 bg-zinc-800 text-zinc-200 text-xs rounded-md px-2 py-1.5 border border-zinc-700 outline-none text-center focus:border-amber-500"
           />
+          <button
+            onClick={handleTap}
+            title="连续点击测速"
+            className="px-2 py-1.5 rounded-md bg-zinc-800 text-zinc-400 text-[10px] font-bold tracking-wider hover:bg-zinc-700 hover:text-amber-400 active:bg-amber-500 active:text-zinc-950"
+          >TAP</button>
         </div>
       </div>
 
@@ -225,6 +277,61 @@ export default function ControlBar({
             <IconShare className="w-3.5 h-3.5" />
             {shareCopied ? '已复制！' : '分享'}
           </button>
+        </div>
+      </div>
+
+      {/* ── 练习辅助行 ── */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800 flex-wrap">
+        <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">练习</span>
+
+        <button
+          onClick={() => onCountInChange(!countIn)}
+          title="播放前先给一小节节拍器预备拍"
+          className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+            countIn
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+          }`}
+        >预备拍</button>
+
+        <button
+          onClick={() => onRampChange(!rampOn)}
+          title="从目标速度的 70% 起步，每循环一遍提速 5%，直到目标 BPM"
+          className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+            rampOn
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+          }`}
+        >渐进加速</button>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onLoopRangeChange(loopRange ? null : { start: 1, end: Math.ceil(totalBars) })}
+            title="只循环指定的小节区间"
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+              loopRange
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+            }`}
+          >区间循环</button>
+          {loopRange && (
+            <span className="flex items-center gap-1 text-xs text-zinc-400">
+              <input
+                type="number" min={1} max={64} value={loopRange.start}
+                onChange={e => updateLoop('start', Number(e.target.value))}
+                aria-label="循环起始小节"
+                className="w-11 bg-zinc-800 text-zinc-200 text-xs rounded-md px-1 py-1 border border-zinc-700 outline-none text-center focus:border-amber-500"
+              />
+              –
+              <input
+                type="number" min={1} max={64} value={loopRange.end}
+                onChange={e => updateLoop('end', Number(e.target.value))}
+                aria-label="循环结束小节"
+                className="w-11 bg-zinc-800 text-zinc-200 text-xs rounded-md px-1 py-1 border border-zinc-700 outline-none text-center focus:border-amber-500"
+              />
+              <span className="text-zinc-600">小节</span>
+            </span>
+          )}
         </div>
       </div>
     </>

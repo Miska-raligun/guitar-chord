@@ -40,6 +40,7 @@ export function useSavedCompositions() {
       keyRoot: state.keyRoot,
       timeSig: state.timeSig,
       noteDuration: state.noteDuration,
+      capo: state.capo,
       chords: state.chords,
       melody: state.melody,
     }

@@ -64,6 +64,16 @@ describe('shareUrl 编解码', () => {
     expect(decoded.chords[2]).toMatchObject({ root: 'D', suffix: '7', noteValue: 4, strumDir: 'X' })
   })
 
+  it('roundtrip：capo 品位（0 时省略字段）', () => {
+    const chords: ChordSlot[] = [{ root: 'C', suffix: 'major', positionIndex: 0 }]
+    const melody = [Array(16).fill(null)]
+    const base = { bpm: 80, pattern: '53231323' as const, keyRoot: 0, timeSig: '4/4' as const, noteDuration: 2 as const, chords, melody }
+    const withCapo = decodeShareUrl(extractParam(encodeShareUrl({ ...base, capo: 3 })))!
+    expect(withCapo.capo).toBe(3)
+    const noCapo = decodeShareUrl(extractParam(encodeShareUrl(base)))!
+    expect(noCapo.capo ?? 0).toBe(0)
+  })
+
   it('无效输入返回 null', () => {
     expect(decodeShareUrl('not-base64!!!')).toBeNull()
     expect(decodeShareUrl('')).toBeNull()

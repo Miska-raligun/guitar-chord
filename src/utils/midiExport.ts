@@ -68,9 +68,10 @@ export interface MidiExportInput {
   timeSig: string
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
+  capo?: number   // 变调夹：全部音符整体升高对应半音
 }
 
-export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): void {
+export function exportMidi({ bpm, timeSig, chords, melody, capo = 0 }: MidiExportInput): void {
   const [tsNum, tsDen] = timeSig.split('/').map(Number)
   const ticksPerBar   = PPQ * tsNum
   const masterSlots   = timeSig === '4/4' ? 16 : timeSig === '2/4' ? 8 : 12
@@ -100,7 +101,7 @@ export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): v
       const intervals = CHORD_INTERVALS[slot.suffix] ?? CHORD_INTERVALS.major
       intervals.forEach((iv, i) => {
         const octave  = i === 0 ? 3 : 4
-        const note    = 12 * octave + ((root + iv) % 12)
+        const note    = 12 * octave + ((root + iv) % 12) + capo
         const onTick  = chordTick + i * 5
         const offTick = chordTick + chordDurTicks - 10
         events.push({ tick: onTick,  on: true,  channel: 0, note, velocity: i === 0 ? 90 : 70 })
@@ -112,7 +113,7 @@ export function exportMidi({ bpm, timeSig, chords, melody }: MidiExportInput): v
     const barRow = melody[slotIdx] ?? []
     barRow.forEach((note, masterSlot) => {
       if (!note) return
-      const midiNote = 60 + note.semitone
+      const midiNote = 60 + note.semitone + capo
       const onTick   = chordTick + masterSlot * tSlot
       const offTick  = onTick + Math.max(tSlot, note.duration * tSlot) - 10
       events.push({ tick: onTick,  on: true,  channel: 1, note: midiNote, velocity: 100 })

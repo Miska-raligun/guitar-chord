@@ -10,6 +10,7 @@ export interface Draft {
   keyRoot: number
   timeSig: TimeSig
   noteDuration: SequencerState['noteDuration']
+  capo?: number
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
 }
@@ -36,15 +37,15 @@ export function clearDraft(): void {
 // 防抖地把当前编曲内容存为草稿。enabled=false 时（如恢复完成前）不写入。
 export function useDraftAutosave(state: SequencerState, enabled: boolean): void {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { bpm, pattern, keyRoot, timeSig, noteDuration, chords, melody } = state
+  const { bpm, pattern, keyRoot, timeSig, noteDuration, capo, chords, melody } = state
 
   useEffect(() => {
     if (!enabled) return
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
-      const draft: Draft = { bpm, pattern, keyRoot, timeSig, noteDuration, chords, melody }
+      const draft: Draft = { bpm, pattern, keyRoot, timeSig, noteDuration, capo, chords, melody }
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch { /* ignore */ }
     }, SAVE_DEBOUNCE_MS)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [enabled, bpm, pattern, keyRoot, timeSig, noteDuration, chords, melody])
+  }, [enabled, bpm, pattern, keyRoot, timeSig, noteDuration, capo, chords, melody])
 }

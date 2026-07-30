@@ -29,6 +29,7 @@ interface Compact {
   k: number   // keyRoot
   t: number   // timeSig index
   d: number   // noteDuration
+  o?: number  // capo（0 省略）
   c: CChord[] // chords
   m: CNote[]  // melody (sparse)
 }
@@ -36,7 +37,7 @@ interface Compact {
 type SharePayload = Pick<
   SequencerState,
   'bpm' | 'pattern' | 'keyRoot' | 'timeSig' | 'noteDuration' | 'chords' | 'melody'
->
+> & { capo?: number }
 
 // ── base64url helpers ────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ export function encodeShareUrl(state: SharePayload): string {
     k: state.keyRoot,
     t: Math.max(0, TIMESIGS.indexOf(state.timeSig as typeof TIMESIGS[number])),
     d: state.noteDuration,
+    ...(state.capo ? { o: state.capo } : {}),
     c: state.chords.map(slot => {
       const nv = slot.noteValue ?? 1
       if (!slot.root || !slot.suffix) return nv > 1 ? [-1, -1, nv] as [number, number, number] : null
@@ -127,6 +129,7 @@ export function decodeShareUrl(encoded: string): SharePayload | null {
         keyRoot:      typeof obj.k === 'number' ? obj.k : 0,
         timeSig:      TIMESIGS[obj.t] ?? '4/4',
         noteDuration: obj.d ?? 2,
+        capo:         typeof obj.o === 'number' ? obj.o : 0,
         chords: rawChords.map(ch => {
           if (!ch) return { root: null, suffix: null, positionIndex: 0 }
           const nv = (ch.length >= 3 && ch[2] > 1) ? ch[2] as (1|2|4|8|16) : undefined

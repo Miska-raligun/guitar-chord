@@ -180,11 +180,11 @@ export function pluckMutedAt(freq: number, time: number, volume = 0.5): void {
   fireAt(cachedBuffer(`muted|${freq.toFixed(2)}`, () => buildKSBufferMuted(freq)), time, volume)
 }
 
-export function strumMutedAt(position: ChordPosition, time: number): void {
+export function strumMutedAt(position: ChordPosition, time: number, freqScale = 1): void {
   const sweepDelay = 0.008
   position.frets.forEach((fret, strIndex) => {
     if (fret === -1) return
-    const freq = OPEN_STRING_FREQS[strIndex] * Math.pow(2, fret / 12)
+    const freq = OPEN_STRING_FREQS[strIndex] * Math.pow(2, fret / 12) * freqScale
     pluckMutedAt(freq, time + strIndex * sweepDelay, 0.45)
   })
 }

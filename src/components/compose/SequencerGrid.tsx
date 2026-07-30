@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../../types/audio'
 import { getMasterSlotsPerBar, getChordMasterDuration } from '../../hooks/useSequencer'
 import ChordCellPicker from './ChordCellPicker'
@@ -137,6 +137,13 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
     return SOLFEGE[offset]
   }
 
+  // 播放跟随：当前小节滚入可视区域
+  useEffect(() => {
+    if (currentBar < 0) return
+    document.querySelector('[data-active-bar="true"]')
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [currentBar])
+
   // 单个旋律小格
   function melodyCell(chordIdx: number, entry: CellEntry, key: string) {
     const { masterSlot, note, flex } = entry
@@ -177,7 +184,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           })
 
           return (
-            <div key={bar.firstIdx} className="flex flex-col gap-1">
+            <div key={bar.firstIdx} className="flex flex-col gap-1" data-active-bar={barActive ? 'true' : undefined}>
               {/* 小节头：编号 + 细分档位 */}
               <div className="flex items-center justify-between gap-2">
                 <span className={`text-[10px] ${barActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
@@ -299,7 +306,7 @@ export default function SequencerGrid({ state, onChordChange, onMelodyChange, on
           const barNum    = barNumbers[chordIdx]
 
           return (
-            <div key={chordIdx} className="flex flex-col gap-1 min-w-0">
+            <div key={chordIdx} className="flex flex-col gap-1 min-w-0" data-active-bar={isActive ? 'true' : undefined}>
               <div className={`text-[10px] text-center ${isActive ? 'text-amber-400 font-bold' : 'text-zinc-600'}`}>
                 {barNum}
               </div>

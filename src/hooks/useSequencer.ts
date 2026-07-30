@@ -4,6 +4,7 @@ import audioEngine from '../audio/AudioEngine'
 import type { ChordPosition } from '../types/chord'
 import type { ChordSlot, MelodyNote, SequencerState, TimeSig } from '../types/audio'
 import { useChordDb } from './useChordDb'
+import { scheduleClick } from './useMetronome'
 import {
   MAX_BARS, MAX_STRUM_SLOTS, MASTER_SLOTS,
   BASS, MUTE_BASS, REST, STRUM_DOWN, STRUM_UP, STRUM_MUTE,
@@ -25,9 +26,33 @@ const SWEEP_DUR  = 0.055
 
 const MAX_HISTORY = 50
 
+// 变速练习：从目标 BPM 的 70% 起步，每循环一遍提高 5%，直到目标速度
+const RAMP_START_RATIO = 0.7
+const RAMP_STEP_RATIO  = 0.05
+
+// 撤销快照：内容 + 设置项
 interface Snapshot {
   chords: ChordSlot[]
   melody: (MelodyNote | null)[][]
+  bpm: number
+  pattern: SequencerState['pattern']
+  keyRoot: number
+  timeSig: TimeSig
+  noteDuration: SequencerState['noteDuration']
+  capo: number
+}
+
+export interface LoopRange { start: number; end: number }  // 1-based 物理小节，含端点
+
+function snapOf(s: Pick<SequencerState, keyof Snapshot>): Snapshot {
+  const { chords, melody, bpm, pattern, keyRoot, timeSig, noteDuration, capo } = s
+  return { chords, melody, bpm, pattern, keyRoot, timeSig, noteDuration, capo }
+}
+
+function snapEquals(a: Snapshot, b: Snapshot): boolean {
+  return a.chords === b.chords && a.melody === b.melody
+    && a.bpm === b.bpm && a.pattern === b.pattern && a.keyRoot === b.keyRoot
+    && a.timeSig === b.timeSig && a.noteDuration === b.noteDuration && a.capo === b.capo
 }
 
 export function useSequencer() {
@@ -37,11 +62,17 @@ export function useSequencer() {
     keyRoot: 0,
     timeSig: '4/4',
     noteDuration: 2,
+    capo: 0,
     chords: makeEmptyChords(),
     melody: makeEmptyMelody(),
     isPlaying: false,
     currentBar: -1,
   })
+
+  // 练习辅助设置（不进快照/草稿：属于"当下怎么练"而非"曲子本身"）
+  const [countIn,   setCountIn]   = useState(true)               // 预备拍
+  const [loopRange, setLoopRangeState] = useState<LoopRange | null>(null)  // A-B 区间循环
+  const [rampOn,    setRampOnState]    = useState(false)         // 变速练习
 
   const { getChordEntry } = useChordDb()
 
@@ -56,48 +87,72 @@ export function useSequencer() {
   const patternRef   = useRef(state.pattern)
   const bpmRef       = useRef(state.bpm)
   const timeSigRef   = useRef(state.timeSig)
+  const capoRef      = useRef(state.capo)
+  const stateRef     = useRef(state)
 
   useEffect(() => { chordsRef.current = state.chords }, [state.chords])
   useEffect(() => { melodyRef.current = state.melody }, [state.melody])
+  useEffect(() => { stateRef.current = state })
+
+  const countInRef   = useRef(countIn)
+  const loopRangeRef = useRef(loopRange)
+  const rampRef      = useRef(rampOn)
+  const rampTargetRef = useRef(0)         // 变速练习的目标 BPM（0 = 未激活）
+  const prevStepRef   = useRef(-1)        // 用于检测循环回到起点
+  useEffect(() => { countInRef.current = countIn }, [countIn])
+  useEffect(() => { loopRangeRef.current = loopRange }, [loopRange])
+  useEffect(() => { rampRef.current = rampOn }, [rampOn])
+
+  const setLoopRange = useCallback((r: LoopRange | null) => setLoopRangeState(r), [])
+  const setRampOn    = useCallback((on: boolean) => setRampOnState(on), [])
 
   // ── 撤销/重做 ──────────────────────────────────────────────
-  // 每次内容变更前把 {chords, melody} 快照压入 past 栈（引用相等去重，
+  // 每次内容或设置变更前把完整快照压入 past 栈（与栈顶完全相同则去重，
   // 因此 StrictMode 下 updater 双调用也不会重复入栈）。
   const pastRef   = useRef<Snapshot[]>([])
   const futureRef = useRef<Snapshot[]>([])
 
-  function pushHistory(s: Pick<SequencerState, 'chords' | 'melody'>) {
+  function pushHistory(s: Pick<SequencerState, keyof Snapshot>) {
+    const snap = snapOf(s)
     const top = pastRef.current[pastRef.current.length - 1]
-    if (top && top.chords === s.chords && top.melody === s.melody) return
-    pastRef.current.push({ chords: s.chords, melody: s.melody })
+    if (top && snapEquals(top, snap)) return
+    pastRef.current.push(snap)
     if (pastRef.current.length > MAX_HISTORY) pastRef.current.shift()
     futureRef.current = []
   }
 
+  // 恢复快照：同步全部播放用 ref，再写回 state
+  const applySnapshot = useCallback((snap: Snapshot) => {
+    chordsRef.current  = snap.chords
+    melodyRef.current  = snap.melody
+    bpmRef.current     = snap.bpm
+    patternRef.current = snap.pattern
+    timeSigRef.current = snap.timeSig
+    capoRef.current    = snap.capo
+    setState(s => ({ ...s, ...snap }))
+  }, [])
+
   const undo = useCallback(() => {
     const prev = pastRef.current.pop()
     if (!prev) return
-    futureRef.current.push({ chords: chordsRef.current, melody: melodyRef.current })
-    chordsRef.current = prev.chords
-    melodyRef.current = prev.melody
-    setState(s => ({ ...s, chords: prev.chords, melody: prev.melody }))
-  }, [])
+    futureRef.current.push(snapOf(stateRef.current))
+    applySnapshot(prev)
+  }, [applySnapshot])
 
   const redo = useCallback(() => {
     const next = futureRef.current.pop()
     if (!next) return
-    pastRef.current.push({ chords: chordsRef.current, melody: melodyRef.current })
-    chordsRef.current = next.chords
-    melodyRef.current = next.melody
-    setState(s => ({ ...s, chords: next.chords, melody: next.melody }))
-  }, [])
+    pastRef.current.push(snapOf(stateRef.current))
+    applySnapshot(next)
+  }, [applySnapshot])
 
   // ── 播放调度 ───────────────────────────────────────────────
   const scheduleStep = useCallback((step: PatternStep, time: number, isBass: boolean, pos: ChordPosition) => {
     if (step === REST) return
+    const capoScale = Math.pow(2, capoRef.current / 12)  // 变调夹整体升高
 
     if (step === STRUM_MUTE) {
-      strumMutedAt(pos, time)
+      strumMutedAt(pos, time, capoScale)
       return
     }
 
@@ -107,7 +162,7 @@ export function useSequencer() {
       strings.forEach((si, i) => {
         const freq = getFreq(pos, si)
         if (freq === null) return
-        pluckStringAt(freq, time + i * dps, 0.78)
+        pluckStringAt(freq * capoScale, time + i * dps, 0.78)
       })
       return
     }
@@ -116,20 +171,20 @@ export function useSequencer() {
       const si   = getBassString(pos)
       const freq = getFreq(pos, si)
       if (freq === null) return
-      pluckStringAt(freq, time, BASS_VOL)
+      pluckStringAt(freq * capoScale, time, BASS_VOL)
       return
     }
 
     if (Array.isArray(step)) {
       step.forEach(si => {
         const freq = getFreq(pos, si)
-        if (freq !== null) pluckStringAt(freq, time, TREBLE_VOL * 1.1)
+        if (freq !== null) pluckStringAt(freq * capoScale, time, TREBLE_VOL * 1.1)
       })
       return
     }
 
     const freq = getFreq(pos, step)
-    if (freq !== null) pluckStringAt(freq, time, isBass ? BASS_VOL : TREBLE_VOL)
+    if (freq !== null) pluckStringAt(freq * capoScale, time, isBass ? BASS_VOL : TREBLE_VOL)
   }, [])
 
   const schedulerTick = useCallback(() => {
@@ -153,11 +208,38 @@ export function useSequencer() {
     }
     const total = cumSlots || master
 
+    // A-B 区间循环：把播放窗口限制在 [loopStart, loopEnd) 主槽范围内
+    // （物理小节边界总在 master 的整数倍上）
+    const lr = loopRangeRef.current
+    let winStart = 0
+    let winEnd = total
+    if (lr) {
+      const numBars = Math.ceil(total / master)
+      const s = Math.max(1, Math.min(lr.start, numBars))
+      const e = Math.max(s, Math.min(lr.end, numBars))
+      winStart = (s - 1) * master
+      winEnd   = Math.min(e * master, total)
+    }
+    const winLen = Math.max(1, winEnd - winStart)
+
     const spb      = getStepsPerBar(pat, timeSig)
     const arpEvery = master / spb
 
     while (nextTimeRef.current < ctx.currentTime + 0.1) {
-      const globalStep = stepRef.current % total
+      const globalStep = winStart + (stepRef.current % winLen)
+
+      // 变速练习：每回到循环起点提速一档，直到目标 BPM
+      if (globalStep === winStart && prevStepRef.current !== -1 && prevStepRef.current !== winStart
+          && rampTargetRef.current > 0) {
+        const target = rampTargetRef.current
+        const next = Math.min(target, Math.round(bpmRef.current + target * RAMP_STEP_RATIO))
+        if (next !== bpmRef.current) {
+          bpmRef.current = next
+          const gen2 = genRef.current
+          setTimeout(() => { if (genRef.current === gen2) setState(s => ({ ...s, bpm: next })) }, 0)
+        }
+      }
+      prevStepRef.current = globalStep
 
       // Find current chord slot index
       let chordIdx = 0
@@ -198,7 +280,8 @@ export function useSequencer() {
       // Melody: indexed by [chordIdx][posInChord]
       const note = melodyRef.current[chordIdx]?.[posInChord]
       if (note) {
-        pluckStringAt(semitoneToFreq(note.semitone), nextTimeRef.current + 0.005, 0.85)
+        const capoScale = Math.pow(2, capoRef.current / 12)
+        pluckStringAt(semitoneToFreq(note.semitone) * capoScale, nextTimeRef.current + 0.005, 0.85)
       }
 
       nextTimeRef.current += sPerMaster
@@ -213,7 +296,14 @@ export function useSequencer() {
     }
     genRef.current++
     stopAllNodes()
-    setState(s => ({ ...s, isPlaying: false, currentBar: -1 }))
+    // 变速练习结束：恢复到目标 BPM
+    const target = rampTargetRef.current
+    rampTargetRef.current = 0
+    if (target > 0) bpmRef.current = target
+    setState(s => ({
+      ...s, isPlaying: false, currentBar: -1,
+      ...(target > 0 ? { bpm: target } : {}),
+    }))
   }, [])
 
   const play = useCallback(() => {
@@ -224,11 +314,36 @@ export function useSequencer() {
     genRef.current++
     stopAllNodes()
 
-    stepRef.current    = 0
-    posRef.current     = null
+    stepRef.current     = 0
+    prevStepRef.current = -1
+    posRef.current      = null
 
     audioEngine.resume()
-    nextTimeRef.current = audioEngine.getContext().currentTime + 0.05
+    const ctx = audioEngine.getContext()
+    let startAt = ctx.currentTime + 0.05
+
+    // 变速练习：从目标 BPM 的 70% 起步
+    if (rampRef.current) {
+      rampTargetRef.current = bpmRef.current
+      const startBpm = Math.max(30, Math.round(bpmRef.current * RAMP_START_RATIO))
+      bpmRef.current = startBpm
+      setState(s => ({ ...s, bpm: startBpm }))
+    } else {
+      rampTargetRef.current = 0
+    }
+
+    // 预备拍：先给一小节节拍器声，再进入正式播放
+    if (countInRef.current) {
+      const BEATS: Record<TimeSig, number> = { '4/4': 4, '3/4': 3, '6/8': 6, '2/4': 2 }
+      const beats = BEATS[timeSigRef.current]
+      const beatDur = getMasterSlotsPerBar(timeSigRef.current) * getMasterSPerStep(bpmRef.current) / beats
+      for (let i = 0; i < beats; i++) {
+        scheduleClick(ctx, startAt + i * beatDur, i === 0)
+      }
+      startAt += beats * beatDur
+    }
+
+    nextTimeRef.current = startAt
     setState(s => ({ ...s, isPlaying: true, currentBar: -1 }))
     intervalRef.current = setInterval(schedulerTick, 25)
   }, [schedulerTick])
@@ -272,25 +387,31 @@ export function useSequencer() {
 
   const setBpm = useCallback((bpm: number) => {
     bpmRef.current = bpm
-    setState(s => ({ ...s, bpm }))
+    setState(s => { pushHistory(s); return { ...s, bpm } })
   }, [])
 
   const setPattern = useCallback((pattern: SequencerState['pattern']) => {
     patternRef.current = pattern
-    setState(s => ({ ...s, pattern }))
+    setState(s => { pushHistory(s); return { ...s, pattern } })
   }, [])
 
   const setKeyRoot = useCallback((keyRoot: number) => {
-    setState(s => ({ ...s, keyRoot }))
+    setState(s => { pushHistory(s); return { ...s, keyRoot } })
   }, [])
 
   const setTimeSig = useCallback((timeSig: TimeSig) => {
     timeSigRef.current = timeSig
-    setState(s => ({ ...s, timeSig }))
+    setState(s => { pushHistory(s); return { ...s, timeSig } })
   }, [])
 
   const setNoteDuration = useCallback((noteDuration: SequencerState['noteDuration']) => {
-    setState(s => ({ ...s, noteDuration }))
+    setState(s => { pushHistory(s); return { ...s, noteDuration } })
+  }, [])
+
+  const setCapo = useCallback((capo: number) => {
+    const c = Math.max(0, Math.min(7, Math.round(capo)))
+    capoRef.current = c
+    setState(s => { pushHistory(s); return { ...s, capo: c } })
   }, [])
 
   const addBar = useCallback((noteValue?: 1|2|4|8|16) => {
@@ -429,7 +550,7 @@ export function useSequencer() {
 
   const clearAll = useCallback(() => {
     stop()
-    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
+    pushHistory(stateRef.current)
     const chords = makeEmptyChords()
     const melody = makeEmptyMelody()
     chordsRef.current = chords
@@ -439,7 +560,7 @@ export function useSequencer() {
 
   const resetBars = useCallback((numBars: number) => {
     stop()
-    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
+    pushHistory(stateRef.current)
     const n = Math.max(1, Math.min(MAX_BARS, numBars))
     const chords = makeEmptyChords(n)
     const melody = makeEmptyMelody(n)
@@ -458,10 +579,11 @@ export function useSequencer() {
       keyRoot?: number
       timeSig?: TimeSig
       noteDuration?: SequencerState['noteDuration']
+      capo?: number
     } = {}
   ) => {
     stop()
-    pushHistory({ chords: chordsRef.current, melody: melodyRef.current })
+    pushHistory(stateRef.current)
     const newChords = [...chords]
     const n = newChords.length
     const newMelody = [...melody]
@@ -472,6 +594,7 @@ export function useSequencer() {
     if (opts.bpm      !== undefined) bpmRef.current     = opts.bpm
     if (opts.pattern  !== undefined) patternRef.current = opts.pattern
     if (opts.timeSig  !== undefined) timeSigRef.current = opts.timeSig
+    if (opts.capo     !== undefined) capoRef.current    = opts.capo
     setState(s => ({
       ...s,
       chords: newChords,
@@ -481,6 +604,7 @@ export function useSequencer() {
       ...(opts.keyRoot     !== undefined ? { keyRoot:      opts.keyRoot     } : {}),
       ...(opts.timeSig     !== undefined ? { timeSig:      opts.timeSig     } : {}),
       ...(opts.noteDuration !== undefined ? { noteDuration: opts.noteDuration } : {}),
+      ...(opts.capo        !== undefined ? { capo:         opts.capo        } : {}),
     }))
   }, [stop])
 
@@ -496,7 +620,9 @@ export function useSequencer() {
     canRedo: futureRef.current.length > 0,
     undo, redo,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
+    setTimeSig, setNoteDuration, setCapo, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
     removeLastBar, clearAll, resetBars, loadComposition, transpose, play, stop,
+    // 练习辅助
+    countIn, setCountIn, loopRange, setLoopRange, rampOn, setRampOn,
   }
 }

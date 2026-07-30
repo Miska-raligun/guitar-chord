@@ -58,6 +58,7 @@ export interface SequencerState {
   keyRoot: number           // 0-11，用于显示 solfège 标注
   timeSig: TimeSig          // 拍号
   noteDuration: 1 | 2 | 4 | 8 | 16  // 当前输入时值（十六分/八分/四分/半/全音符，主网格槽数）
+  capo: number              // 变调夹品位 0-7，播放整体升高对应半音
   chords: ChordSlot[]       // length = numBars
   melody: (MelodyNote | null)[][]  // [bar][masterSlot=0..15]，十六分音符主网格
   isPlaying: boolean

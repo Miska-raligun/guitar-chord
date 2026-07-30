@@ -24,8 +24,9 @@ export default function ComposeTab() {
   const {
     state, canUndo, canRedo, undo, redo,
     setChordSlot, setMelodyNote, setBpm, setPattern, setKeyRoot,
-    setTimeSig, setNoteDuration, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
+    setTimeSig, setNoteDuration, setCapo, addBar, appendChordSlot, addStrumPattern, fillBarAt, setBarSubdivision,
     removeLastBar, clearAll, loadComposition, transpose, play, stop,
+    countIn, setCountIn, loopRange, setLoopRange, rampOn, setRampOn,
   } = useSequencer()
   const { list: savedList, save: saveComposition, remove: removeComposition, exportAll, importFrom } = useSavedCompositions()
   const { generate, isLoading: aiLoading, progress: aiProgress, error: aiError, clearError: clearAiError } = useAiCompose()
@@ -69,7 +70,7 @@ export default function ComposeTab() {
       if (draft) {
         loadComposition(draft.chords, draft.melody, {
           bpm: draft.bpm, pattern: draft.pattern, keyRoot: draft.keyRoot,
-          timeSig: draft.timeSig, noteDuration: draft.noteDuration,
+          timeSig: draft.timeSig, noteDuration: draft.noteDuration, capo: draft.capo,
         })
       }
     }
@@ -86,16 +87,33 @@ export default function ComposeTab() {
     appendChordSlot(root, suffix)
   }), [appendChordSlot])
 
-  // Ctrl/Cmd+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做（输入框内不拦截）
+  // 快捷键：Ctrl/Cmd+Z 撤销、Ctrl+Shift+Z / Ctrl+Y 重做、空格 播放/停止（输入框内不拦截）
   const undoRef = useRef(undo)
   const redoRef = useRef(redo)
-  undoRef.current = undo
-  redoRef.current = redo
+  const playRef = useRef(play)
+  const stopRef = useRef(stop)
+  const playingRef = useRef(state.isPlaying)
+  useEffect(() => {
+    undoRef.current = undo
+    redoRef.current = redo
+    playRef.current = play
+    stopRef.current = stop
+    playingRef.current = state.isPlaying
+  })
+  const rootRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return
+      // 编曲 Tab 被隐藏（在其他 Tab 上）时不响应快捷键
+      if (rootRef.current && rootRef.current.offsetParent === null) return
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
+      if (e.code === 'Space' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault()
+        if (playingRef.current) stopRef.current()
+        else playRef.current()
+        return
+      }
+      if (!(e.ctrlKey || e.metaKey)) return
       const key = e.key.toLowerCase()
       if (key === 'z' && !e.shiftKey) { e.preventDefault(); undoRef.current() }
       else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redoRef.current() }
@@ -129,6 +147,7 @@ export default function ComposeTab() {
         keyRoot:      src.keyRoot,
         timeSig:      src.timeSig,
         noteDuration: 'noteDuration' in src ? src.noteDuration : undefined,
+        capo:         'capo' in src ? src.capo : undefined,
       })
       if ('tone' in src && src.tone) setToneConfig(src.tone)
     }
@@ -153,7 +172,7 @@ export default function ComposeTab() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={rootRef} className="flex flex-col h-full">
       <ControlBar
         state={state}
         setBpm={setBpm}
@@ -161,12 +180,19 @@ export default function ComposeTab() {
         setKeyRoot={setKeyRoot}
         setTimeSig={setTimeSig}
         setNoteDuration={setNoteDuration}
+        setCapo={setCapo}
         transpose={transpose}
         metronome={metronome}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
         onRedo={redo}
+        countIn={countIn}
+        onCountInChange={setCountIn}
+        loopRange={loopRange}
+        onLoopRangeChange={setLoopRange}
+        rampOn={rampOn}
+        onRampChange={setRampOn}
       />
 
       {/* ── Action row (AI / Save / Library) ── */}
