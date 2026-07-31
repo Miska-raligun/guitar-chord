@@ -4,6 +4,7 @@ import { useArpeggio } from '../../hooks/useArpeggio'
 import { onAppEvent, EV_VIEW_CHORD } from '../../utils/appBus'
 import type { ChordRef } from '../../utils/appBus'
 import ChordChangeTrainer from './ChordChangeTrainer'
+import type { TrainerChord } from './ChordChangeTrainer'
 import RootSelector from './RootSelector'
 import SuffixSelector from './SuffixSelector'
 import PositionSelector from './PositionSelector'
@@ -27,6 +28,23 @@ export default function BrowseTab() {
   const [localPattern, setLocalPattern] = useState<ArpeggioPattern>('53231323')
   const [customSteps, setCustomSteps] = useState<CustomStepKind[]>(DEFAULT_CUSTOM_STEPS)
   const [customTimeSig, setCustomTimeSig] = useState<TimeSig>(DEFAULT_CUSTOM_TIMSIG)
+
+  // 和弦转换练习的选中列表提到这里，好让和弦区直接"加入练习"
+  const [trainerList, setTrainerList] = useState<TrainerChord[]>([])
+  const [trainerOpen, setTrainerOpen] = useState(false)
+
+  const inTrainer = trainerList.some(c => c.root === selectedRoot && c.suffix === selectedSuffix)
+  const trainerFull = trainerList.length >= 4
+
+  function toggleTrainerChord() {
+    if (inTrainer) {
+      setTrainerList(trainerList.filter(c => !(c.root === selectedRoot && c.suffix === selectedSuffix)))
+      return
+    }
+    if (trainerFull) return
+    setTrainerList([...trainerList, { root: selectedRoot, suffix: selectedSuffix }])
+    setTrainerOpen(true)   // 首次加入时把练习区展开，让用户看到
+  }
 
   const entry = getChordEntry(selectedRoot, selectedSuffix)
   const positions = entry?.positions ?? []
@@ -108,6 +126,21 @@ export default function BrowseTab() {
               current={safePositionIndex}
               onChange={idx => { setPositionIndex(idx); stop() }}
             />
+
+            <button
+              onClick={toggleTrainerChord}
+              disabled={!inTrainer && trainerFull}
+              title={!inTrainer && trainerFull ? '最多选 4 个和弦' : undefined}
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+                inTrainer
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-amber-400 border border-transparent'
+              }`}
+            >
+              {inTrainer
+                ? `✓ 已在练习中（${trainerList.length}）`
+                : trainerFull ? '练习已满 4 个' : '＋ 加入练习'}
+            </button>
           </div>
 
           <div className="bg-zinc-800/50 rounded-xl p-4 space-y-4">
@@ -140,7 +173,12 @@ export default function BrowseTab() {
       )}
 
       <div className="flex justify-center">
-        <ChordChangeTrainer currentRoot={selectedRoot} currentSuffix={selectedSuffix} />
+        <ChordChangeTrainer
+          list={trainerList}
+          onListChange={setTrainerList}
+          open={trainerOpen}
+          onOpenChange={setTrainerOpen}
+        />
       </div>
     </div>
   )
