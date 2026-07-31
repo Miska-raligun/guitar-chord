@@ -147,7 +147,7 @@ export default function ChordChangeTrainer({ list, onListChange, open, onOpenCha
       {open && (
         <div className="px-4 pb-4 flex flex-col gap-3">
           <p className="text-[11px] text-zinc-500 leading-relaxed">
-            在上方和弦区点「加入练习」选 2–4 个和弦，节拍器每 {beatsPerChange} 拍随机换一个目标，跟着按。结束后数一数完成了几次干净转换。
+            在上方和弦区点「加入练习」把要练的和弦加进来（至少 2 个，不限数量），节拍器每 {beatsPerChange} 拍随机换一个目标，跟着按。结束后数一数完成了几次干净转换。
           </p>
 
           {/* 已选和弦 */}

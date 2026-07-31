@@ -34,14 +34,12 @@ export default function BrowseTab() {
   const [trainerOpen, setTrainerOpen] = useState(false)
 
   const inTrainer = trainerList.some(c => c.root === selectedRoot && c.suffix === selectedSuffix)
-  const trainerFull = trainerList.length >= 4
 
   function toggleTrainerChord() {
     if (inTrainer) {
       setTrainerList(trainerList.filter(c => !(c.root === selectedRoot && c.suffix === selectedSuffix)))
       return
     }
-    if (trainerFull) return
     setTrainerList([...trainerList, { root: selectedRoot, suffix: selectedSuffix }])
     setTrainerOpen(true)   // 首次加入时把练习区展开，让用户看到
   }
@@ -129,17 +127,13 @@ export default function BrowseTab() {
 
             <button
               onClick={toggleTrainerChord}
-              disabled={!inTrainer && trainerFull}
-              title={!inTrainer && trainerFull ? '最多选 4 个和弦' : undefined}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 inTrainer
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
                   : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-amber-400 border border-transparent'
               }`}
             >
-              {inTrainer
-                ? `✓ 已在练习中（${trainerList.length}）`
-                : trainerFull ? '练习已满 4 个' : '＋ 加入练习'}
+              {inTrainer ? `✓ 已在练习中（${trainerList.length}）` : '＋ 加入练习'}
             </button>
           </div>
 
